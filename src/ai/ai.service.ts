@@ -33,6 +33,23 @@ export class AiService {
     return !!this.client;
   }
 
+  /** Lightweight RTT probe for SPEECH_PROVIDER=auto (does not record usage). */
+  async pingMs(): Promise<number | null> {
+    if (!this.client) return null;
+    const started = Date.now();
+    try {
+      await this.client.models.generateContent({
+        model: this.model,
+        contents: 'Reply with exactly: ok',
+        config: { maxOutputTokens: 4 },
+      });
+      return Date.now() - started;
+    } catch (err) {
+      this.logger.debug(`Gemini ping failed: ${(err as Error).message}`);
+      return null;
+    }
+  }
+
   private extractUsage(response: {
     usageMetadata?: UsageMeta;
   }): {

@@ -12,6 +12,10 @@ export interface SpeechSession {
 
 export interface SpeechProvider {
   readonly name: string;
+  /** True when API key / client is configured and usable */
+  isReady(): boolean;
+  /** Lightweight latency probe in ms; null if probe failed */
+  probeLatencyMs?(): Promise<number | null>;
   createSession(options: {
     language?: string;
     category?: string;

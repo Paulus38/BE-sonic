@@ -36,6 +36,8 @@ export class HealthController {
       service: this.config.get<string>('app.name'),
       dbProvider: this.config.get<string>('app.db.provider') ?? 'firestore',
       speechProvider: this.speechService.getProviderName(),
+      speechMode: this.speechService.getMode(),
+      speechLatencyMs: this.speechService.getLatencyMs(),
       geminiActive: this.aiService.isAvailable(),
       storage: {
         provider,

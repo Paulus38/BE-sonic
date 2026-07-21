@@ -14,6 +14,8 @@ export enum RecordingStatus {
 export enum SpeechProviderType {
   GEMINI = 'gemini',
   DEEPGRAM = 'deepgram',
+  /** Pick the ready provider with lowest recent latency */
+  AUTO = 'auto',
 }
 
 /** System RBAC roles */

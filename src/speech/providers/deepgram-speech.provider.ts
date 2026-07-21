@@ -72,6 +72,29 @@ export class DeepgramSpeechProvider implements SpeechProvider {
 
   constructor(private readonly config: ConfigService) {}
 
+  isReady(): boolean {
+    return !!this.config.get<string>('app.deepgramApiKey')?.trim();
+  }
+
+  async probeLatencyMs(): Promise<number | null> {
+    const apiKey = this.config.get<string>('app.deepgramApiKey')?.trim();
+    if (!apiKey) return null;
+    const started = Date.now();
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch('https://api.deepgram.com/v1/projects', {
+        headers: { Authorization: `Token ${apiKey}` },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!res.ok) return null;
+      return Date.now() - started;
+    } catch {
+      return null;
+    }
+  }
+
   createSession(options: { language?: string }): SpeechSession {
     const apiKey = this.config.get<string>('app.deepgramApiKey');
     if (!apiKey) {

@@ -56,7 +56,8 @@ See **[AI_SETUP.md](./AI_SETUP.md)** for which product features need AI vs free 
 
 | `SPEECH_PROVIDER` | Requires |
 |-------------------|----------|
-| `gemini` (default) | `GEMINI_API_KEY` |
+| `auto` (recommended) | Both keys preferred; picks fastest ready provider |
+| `gemini` | `GEMINI_API_KEY` |
 | `deepgram` | `DEEPGRAM_API_KEY` |
 
 Also: [FIREBASE_SETUP.md](./FIREBASE_SETUP.md), [VERCEL_BLOB_SETUP.md](./VERCEL_BLOB_SETUP.md).

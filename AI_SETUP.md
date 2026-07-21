@@ -34,19 +34,26 @@ flowchart LR
 ### Bật AI tối thiểu
 
 ```bash
-# be/.env
-SPEECH_PROVIDER=gemini
+# be/.env — auto = đo latency Deepgram vs Gemini (~mỗi 60s), chọn cái nhanh hơn
+SPEECH_PROVIDER=auto
 GEMINI_API_KEY=your_key_here
 GEMINI_MODEL=gemini-2.0-flash
+DEEPGRAM_API_KEY=your_key_here
 ```
 
-Hoặc Deepgram cho STT:
+Hoặc ép một provider:
 
 ```bash
-SPEECH_PROVIDER=deepgram
-DEEPGRAM_API_KEY=your_key_here
-GEMINI_API_KEY=your_key_here   # vẫn cần nếu muốn tóm tắt / dịch Gemini
+SPEECH_PROVIDER=gemini   # chỉ Gemini
+# hoặc
+SPEECH_PROVIDER=deepgram # chỉ Deepgram
 ```
+
+`SPEECH_PROVIDER=auto`:
+- Probe RTT cả hai API (Deepgram `/v1/projects`, Gemini generateContent nhỏ).
+- Session mới dùng provider latency thấp hơn (cache 60s).
+- Nếu `start()` fail → failover sang provider còn lại.
+- Health: `GET /api/v1/health` → `speechMode`, `speechProvider`, `speechLatencyMs`.
 
 Lấy Gemini key: [Google AI Studio](https://aistudio.google.com/apikey).
 

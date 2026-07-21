@@ -78,6 +78,14 @@ export class GeminiSpeechProvider implements SpeechProvider {
 
   constructor(private readonly ai: AiService) {}
 
+  isReady(): boolean {
+    return this.ai.isAvailable();
+  }
+
+  async probeLatencyMs(): Promise<number | null> {
+    return this.ai.pingMs();
+  }
+
   createSession(options: {
     category?: string;
     language?: string;
