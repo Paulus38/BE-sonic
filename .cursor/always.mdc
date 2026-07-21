@@ -1,0 +1,8 @@
+If the task modifies authentication,
+review security.
+
+If the task modifies database,
+review query performance.
+
+If the task creates APIs,
+review validation and error handling.

@@ -1,0 +1,35 @@
+Coding Standards
+
+Use TypeScript.
+
+Never use "any".
+
+Always:
+
+- async/await
+- DTO
+- Interfaces
+- Enums
+- Dependency Injection
+
+Naming:
+
+camelCase
+
+Classes:
+
+PascalCase
+
+Constants:
+
+UPPER_CASE
+
+Functions should have one responsibility.
+
+Maximum function length:
+
+40 lines
+
+Maximum file length:
+
+300 lines

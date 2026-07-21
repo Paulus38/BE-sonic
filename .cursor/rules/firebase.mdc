@@ -1,0 +1,20 @@
+## Firebase
+
+If Firebase Cloud Messaging (FCM) is selected:
+
+Always use
+
+- firebase-admin
+- service account
+- environment variables
+- dependency injection
+
+Never initialize Firebase multiple times.
+
+Create a dedicated FirebaseModule.
+
+Create a FirebaseService.
+
+Controllers should never call firebase-admin directly.
+
+---

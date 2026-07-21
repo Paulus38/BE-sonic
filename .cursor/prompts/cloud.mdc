@@ -1,0 +1,75 @@
+# Cloud Media Storage Prompt
+
+## Goal
+
+All binary media in this project must be stored in **cloud object storage**, never inside the application source tree or the git repository.
+
+Applies to:
+
+- Audio recordings (`.webm`, `.wav`, `.mp3`, `.m4a`, `.ogg`, …)
+- Images (avatars, thumbnails, covers, …)
+- Videos (if any)
+
+## Hard rules
+
+1. **Never save media under `src/`**, `be/src/`, `fe/src/`, or any path that ships with source code.
+2. **Never commit media files** to git (no `uploads/`, no `assets/recordings/`, no binary blobs in PRs).
+3. **Never treat local disk as primary storage** in production or shared environments.
+4. Database / entities must store only **cloud object keys + public/signed URLs + mime + size metadata**, not file buffers.
+5. Controllers must not write files with `fs` / Multer disk storage. Accept upload in memory (or stream), then hand off to a storage service that uploads to cloud.
+6. Playback / download must go through **cloud signed URL** or a backend proxy that streams from cloud — not `createReadStream` of a local `uploads/` path as the long-term design.
+
+## Preferred stack (this repo)
+
+- **Firebase Storage** (or Google Cloud Storage) via Admin SDK
+- Dedicated `StorageModule` + `StorageService` (DI only)
+- Config via env: bucket name, credentials / service account, public base URL
+- Object key pattern:
+
+```text
+users/{userId}/recordings/{recordingId}/{uuid}.{ext}
+users/{userId}/images/{uuid}.{ext}
+users/{userId}/videos/{uuid}.{ext}
+```
+
+## What to implement / migrate
+
+When touching storage, recording upload, avatar, or media APIs:
+
+1. Replace local filesystem `StorageService` (`./uploads`, `mkdirSync`, `createWriteStream`) with cloud upload/delete/getSignedUrl.
+2. Keep a thin interface so services stay provider-agnostic:
+
+```ts
+upload(file, key, contentType) -> { key, url, mime, size }
+delete(key) -> void
+getSignedUrl(key, expiresInSec) -> string
+```
+
+3. On recording delete / soft-delete, also delete the cloud object (or mark for lifecycle cleanup).
+4. Update `.gitignore` so any leftover local cache dirs are ignored; do not rely on them.
+5. Local/dev may use an emulator or a dedicated **dev bucket**, still cloud-backed — not `be/uploads` as source of truth.
+
+## Anti-patterns (reject in review)
+
+- `path.join(__dirname, 'uploads', …)`
+- Saving under `src/assets`, `public/recordings`, `be/uploads` as production storage
+- Returning local absolute paths to the client
+- Embedding base64 media in Postgres / SQLite as the main strategy
+- Multer `dest: './uploads'` disk storage for recordings
+
+## Acceptance checklist
+
+- [ ] Upload recording → object appears in cloud bucket under user-scoped key
+- [ ] DB stores `audioKey` / `audioUrl` (cloud), not local relative path as sole truth
+- [ ] GET audio works via signed URL or cloud stream
+- [ ] Delete recording removes cloud object
+- [ ] No new media files appear under `src/` or tracked git paths
+- [ ] Env docs list bucket + credentials; no secrets in repo
+
+## Response style for agents using this prompt
+
+1. Explain migration impact (DB fields, API contracts, env).
+2. Implement cloud storage behind `StorageService`.
+3. Migrate recording upload / stream / delete endpoints.
+4. Remove or hard-deprecate local disk paths for media.
+5. Verify with a short test plan (upload → play → delete).

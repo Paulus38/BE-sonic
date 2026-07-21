@@ -1,0 +1,22 @@
+Security Rules
+
+Always validate input.
+
+Never trust client data.
+
+Prevent:
+
+- SQL Injection
+- XSS
+- CSRF
+- JWT misuse
+
+Never expose:
+
+- passwords
+- secrets
+- tokens
+
+Hash passwords using bcrypt.
+
+Always authorize protected APIs.

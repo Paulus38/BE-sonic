@@ -1,0 +1,23 @@
+Database Standards
+
+Use SQL or No SQL.
+
+Use transactions for:
+
+- money
+- inventory
+- booking
+
+Never execute raw SQL unless necessary.
+
+Optimize:
+
+- indexes
+- joins
+
+Always:
+
+- pagination
+- soft delete if needed
+
+Prevent N+1 queries.

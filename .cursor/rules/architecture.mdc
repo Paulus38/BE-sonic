@@ -1,0 +1,25 @@
+Architecture Rules
+
+Use:
+
+- NestJS
+- Repository Pattern
+- Service Layer
+- Dependency Injection
+- SOLID Principles
+
+Business logic belongs only in Services.
+
+Controllers only:
+
+- validate request
+- call service
+- return response
+
+Repositories only:
+
+- database queries
+
+Avoid duplicated code.
+
+Keep modules loosely coupled.

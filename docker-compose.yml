@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sonic-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sonic
+      POSTGRES_PASSWORD: sonic_secure_pass
+      POSTGRES_DB: sonic_scribe
+    ports:
+      - "5432:5432"
+    volumes:
+      - sonic_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sonic -d sonic_scribe"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  sonic_pg_data:

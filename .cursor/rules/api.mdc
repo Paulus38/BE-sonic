@@ -1,0 +1,27 @@
+RESTfull API Standards
+
+Always:
+
+- Version APIs
+- Validate DTO
+- Return consistent responses
+- Use HttpException
+- Add Swagger decorators
+
+HTTP Status:
+
+200 GET
+
+201 POST
+
+204 DELETE
+
+400 Validation
+
+401 Unauthorized
+
+403 Forbidden
+
+404 Not Found
+
+500 Internal Server Error

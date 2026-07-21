@@ -1,0 +1,21 @@
+Performance Rules
+
+Prefer:
+
+Redis cache
+
+Pagination
+
+Lazy loading
+
+Batch processing
+
+Avoid:
+
+Repeated queries
+
+Blocking operations
+
+Large payloads
+
+Optimize response time whenever possible.

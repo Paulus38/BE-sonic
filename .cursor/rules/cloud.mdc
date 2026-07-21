@@ -1,0 +1,25 @@
+---
+description: Cloud-only storage for audio, images, and videos — never in src or local repo paths
+globs: be/src/storage/**/*.ts,be/src/recordings/**/*.ts,be/src/users/**/*.ts
+alwaysApply: false
+---
+
+# Cloud media storage
+
+All recordings, images, and videos MUST be stored in cloud object storage (Firebase Storage / GCS).
+
+## Required
+
+- Upload via `StorageService` to cloud bucket
+- Persist only object key + URL + mime/size in DB
+- Serve via signed URL or cloud stream
+- Object keys: `users/{userId}/recordings|images|videos/{id}/{uuid}.ext`
+
+## Forbidden
+
+- Saving media under `src/`, `be/src/`, `fe/src/`
+- Using `be/uploads` or local disk as primary storage
+- Committing audio/image/video binaries to git
+- Controllers calling `fs` / Multer disk `dest` for media
+
+Local filesystem is allowed only as a temporary buffer before cloud upload, never as source of truth.
