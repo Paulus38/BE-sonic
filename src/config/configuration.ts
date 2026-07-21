@@ -19,6 +19,21 @@ export default registerAs('app', () => ({
   maxAudioMb: parseInt(process.env.MAX_AUDIO_MB ?? '50', 10),
   throttleTtlMs: parseInt(process.env.THROTTLE_TTL_MS ?? '60000', 10),
   throttleLimit: parseInt(process.env.THROTTLE_LIMIT ?? '120', 10),
+  r2: {
+    accountId: process.env.R2_ACCOUNT_ID ?? '',
+    accessKeyId: process.env.R2_ACCESS_KEY_ID ?? '',
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? '',
+    bucket: process.env.R2_BUCKET ?? '',
+    endpoint: process.env.R2_ENDPOINT ?? '',
+    publicBaseUrl: process.env.R2_PUBLIC_BASE_URL ?? '',
+  },
+  vercelBlob: {
+    token:
+      process.env.BLOB_READ_WRITE_TOKEN ??
+      process.env.VERCEL_BLOB_READ_WRITE_TOKEN ??
+      '',
+    access: process.env.BLOB_ACCESS ?? 'public',
+  },
   firebase: {
     enabled: process.env.FIREBASE_ENABLED !== 'false',
     projectId: process.env.FIREBASE_PROJECT_ID ?? 'sonic-27ed5',
@@ -29,7 +44,9 @@ export default registerAs('app', () => ({
     serviceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON ?? '',
   },
   db: {
-    type: process.env.DB_TYPE ?? 'postgres',
+    /** firestore (cloud) — default. Legacy: sqlite | postgres via TypeORM (removed). */
+    provider: process.env.DB_PROVIDER ?? 'firestore',
+    type: process.env.DB_TYPE ?? 'sqlite',
     host: process.env.DB_HOST ?? 'localhost',
     port: parseInt(process.env.DB_PORT ?? '5432', 10),
     username: process.env.DB_USER ?? 'sonic',
@@ -39,4 +56,8 @@ export default registerAs('app', () => ({
     synchronize: process.env.DB_SYNC === 'true',
     logging: process.env.DB_LOGGING === 'true',
   },
+  adminEmails: (process.env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
 }));

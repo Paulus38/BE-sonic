@@ -17,26 +17,34 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
-    const status =
+    const firestoreHint = this.firestoreSetupHint(exception);
+
+    let status =
       exception instanceof HttpException
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
-
-    const exceptionResponse =
-      exception instanceof HttpException ? exception.getResponse() : null;
-
     let message = 'Internal server error';
-    if (typeof exceptionResponse === 'string') {
-      message = exceptionResponse;
-    } else if (
-      exceptionResponse &&
-      typeof exceptionResponse === 'object' &&
-      'message' in exceptionResponse
-    ) {
-      const raw = (exceptionResponse as { message: string | string[] }).message;
-      message = Array.isArray(raw) ? raw.join(', ') : raw;
-    } else if (exception instanceof Error && status < 500) {
-      message = exception.message;
+
+    if (firestoreHint) {
+      status = HttpStatus.SERVICE_UNAVAILABLE;
+      message = firestoreHint;
+    } else {
+      const exceptionResponse =
+        exception instanceof HttpException ? exception.getResponse() : null;
+
+      if (typeof exceptionResponse === 'string') {
+        message = exceptionResponse;
+      } else if (
+        exceptionResponse &&
+        typeof exceptionResponse === 'object' &&
+        'message' in exceptionResponse
+      ) {
+        const raw = (exceptionResponse as { message: string | string[] })
+          .message;
+        message = Array.isArray(raw) ? raw.join(', ') : raw;
+      } else if (exception instanceof Error && status < 500) {
+        message = exception.message;
+      }
     }
 
     if (status >= 500) {
@@ -53,5 +61,28 @@ export class AllExceptionsFilter implements ExceptionFilter {
       path: request.url,
       timestamp: new Date().toISOString(),
     });
+  }
+
+  private firestoreSetupHint(exception: unknown): string | null {
+    const code =
+      exception && typeof exception === 'object' && 'code' in exception
+        ? Number((exception as { code: unknown }).code)
+        : undefined;
+    const msg = exception instanceof Error ? exception.message : String(exception);
+    if (code === 5 || /5 NOT_FOUND/i.test(msg) || /NOT_FOUND:\s*$/i.test(msg)) {
+      return (
+        'Firestore database chưa được tạo trên project sonic-27ed5. ' +
+        'Mở https://console.firebase.google.com/project/sonic-27ed5/firestore ' +
+        '→ Create database (Native mode) → rồi đăng ký/đăng nhập lại.'
+      );
+    }
+    if (/bucket does not exist/i.test(msg) || /billing account/i.test(msg)) {
+      return (
+        'Firebase Storage chưa sẵn sàng (bucket/billing). ' +
+        'Mở https://console.firebase.google.com/project/sonic-27ed5/storage → Get started. ' +
+        'Có thể cần bật Blaze billing. Hiện BE sẽ fallback local nếu STORAGE_ALLOW_LOCAL_FALLBACK=true.'
+      );
+    }
+    return null;
   }
 }

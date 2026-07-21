@@ -15,5 +15,6 @@ export interface SpeechProvider {
   createSession(options: {
     language?: string;
     category?: string;
+    userId?: string;
   }): SpeechSession;
 }

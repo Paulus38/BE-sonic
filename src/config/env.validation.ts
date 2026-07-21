@@ -70,11 +70,13 @@ export function validateEnv(config: Record<string, unknown>) {
     throw new Error(`Environment validation failed: ${messages}`);
   }
 
-  const dbType = String(config.DB_TYPE ?? 'postgres');
-  if (dbType === 'postgres') {
+  const provider = String(config.DB_PROVIDER ?? 'firestore');
+  if (provider === 'postgres' || String(config.DB_TYPE ?? '') === 'postgres') {
     for (const key of ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME']) {
       if (!config[key]) {
-        throw new Error(`Environment validation failed: ${key} is required for postgres`);
+        throw new Error(
+          `Environment validation failed: ${key} is required for postgres`,
+        );
       }
     }
   }

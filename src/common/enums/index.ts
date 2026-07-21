@@ -15,3 +15,11 @@ export enum SpeechProviderType {
   GEMINI = 'gemini',
   DEEPGRAM = 'deepgram',
 }
+
+/** System RBAC roles */
+export enum UserRole {
+  USER = 'user',
+  ADMIN = 'admin',
+}
+
+export type AiFeature = 'summarize' | 'translate' | 'transcribe';

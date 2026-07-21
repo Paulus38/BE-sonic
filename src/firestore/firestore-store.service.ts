@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { FirebaseService } from '../firebase/firebase.service';
 import { randomUUID } from 'crypto';
 import type {
@@ -16,26 +16,22 @@ import type {
  * - dictionary/{itemId}
  */
 @Injectable()
-export class FirestoreStore implements OnModuleInit {
-  private readonly logger = new Logger(FirestoreStore.name);
-
+export class FirestoreStore {
   constructor(private readonly firebase: FirebaseService) {}
-
-  onModuleInit() {
-    if (this.firebase.isReady()) {
-      this.logger.log('Firestore ready on sonic-27ed5');
-    } else {
-      this.logger.warn(
-        'Firestore idle — waiting for Admin SDK credentials (be/secrets/*-adminsdk.json)',
-      );
-    }
-  }
 
   isReady() {
     return this.firebase.isReady();
   }
 
-  private db(): Firestore {
+  requireReady() {
+    if (!this.isReady()) {
+      throw new ServiceUnavailableException(
+        'Firestore is not ready. Add be/secrets/sonic-27ed5-firebase-adminsdk.json',
+      );
+    }
+  }
+
+  db(): Firestore {
     return this.firebase.firestore();
   }
 
@@ -55,7 +51,41 @@ export class FirestoreStore implements OnModuleInit {
     return this.db().collection('dictionary');
   }
 
+  /** Aggregate AI token usage per user */
+  aiUsage(): CollectionReference {
+    return this.db().collection('ai_usage');
+  }
+
+  aiUsageEvents(userId: string): CollectionReference {
+    return this.aiUsage().doc(userId).collection('events');
+  }
+
   newId() {
     return randomUUID();
+  }
+
+  /** Map raw Firestore/gRPC errors to actionable HTTP errors. */
+  rethrow(err: unknown): never {
+    const code =
+      err && typeof err === 'object' && 'code' in err
+        ? Number((err as { code: unknown }).code)
+        : undefined;
+    const message = err instanceof Error ? err.message : String(err);
+
+    if (
+      code === 5 ||
+      /NOT_FOUND/i.test(message) ||
+      /does not exist/i.test(message)
+    ) {
+      throw new ServiceUnavailableException(
+        'Firestore database chưa được tạo trên project sonic-27ed5. Mở https://console.firebase.google.com/project/sonic-27ed5/firestore và bấm Create database (Native mode), rồi thử lại.',
+      );
+    }
+    if (code === 7 || /PERMISSION_DENIED/i.test(message)) {
+      throw new ServiceUnavailableException(
+        'Service account không đủ quyền Firestore. Cấp role Cloud Datastore User / Firebase Admin cho firebase-adminsdk.',
+      );
+    }
+    throw err instanceof Error ? err : new Error(message);
   }
 }

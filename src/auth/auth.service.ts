@@ -8,6 +8,7 @@ import { LoginDto } from './dto/login.dto';
 export interface JwtPayload {
   sub: string;
   email: string;
+  role?: string;
 }
 
 @Injectable()
@@ -44,7 +45,11 @@ export class AuthService {
     email: string,
     user: Awaited<ReturnType<UsersService['findByIdOrFail']>>,
   ) {
-    const payload: JwtPayload = { sub: userId, email };
+    const payload: JwtPayload = {
+      sub: userId,
+      email,
+      role: user.role || 'user',
+    };
     const accessToken = this.jwtService.sign(payload);
     return {
       accessToken,

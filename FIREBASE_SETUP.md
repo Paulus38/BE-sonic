@@ -11,9 +11,19 @@ Console: https://console.firebase.google.com/u/0/project/sonic-27ed5/overview
 
 ## Bước bắt buộc (1 lần)
 
-### 1) Bật Storage + Firestore trên Console
-- Build → **Storage** → Get started
-- Build → **Firestore Database** → Create database (production mode ok; server dùng Admin SDK)
+### 1) Bật Storage + **Firestore Database** trên Console (bắt buộc)
+
+Firestore **phải được Create** — nếu chưa có DB, login/register sẽ lỗi `NOT_FOUND`.
+
+1. Mở: https://console.firebase.google.com/project/sonic-27ed5/firestore  
+2. **Create database** → chọn **Native mode**  
+3. Location gợi ý: `asia-southeast1` (Singapore) hoặc multi-region  
+4. Start in **production mode** (server dùng Admin SDK, rules client deny-all ok)
+
+- Build → **Storage** → Get started (bắt buộc để upload audio lên cloud)
+  - Link: https://console.firebase.google.com/project/sonic-27ed5/storage  
+  - Project mới thường **cần Blaze billing** mới tạo được bucket.  
+  - Nếu chưa bật được Storage: BE sẽ tạm lưu audio local (`STORAGE_ALLOW_LOCAL_FALLBACK=true`).
 
 ### 2) Tạo service account key
 1. Project settings (⚙️) → **Service accounts**
@@ -50,7 +60,7 @@ Check: `GET http://localhost:3001/api/v1/health`
 
 ### 5) Ghi âm lại
 Bản ghi mới sẽ:
-- Metadata → Firestore (khi `DB_PROVIDER=firestore`) hoặc SQLite tạm
+- Metadata (users, recordings, transcript, dictionary) → **Firestore**
 - Audio → `gs://sonic-27ed5.firebasestorage.app/users/{userId}/recordings/...`
 
 ## Env
@@ -62,4 +72,4 @@ FIREBASE_SERVICE_ACCOUNT_PATH=./secrets/sonic-27ed5-firebase-adminsdk.json
 DB_PROVIDER=firestore
 ```
 
-Cho đến khi có service account, backend tạm lưu audio local trong `be/uploads` để bạn vẫn nghe lại được — sau khi gắn key, bản ghi mới sẽ lên Firebase.
+App data và audio đều lưu trên Firebase (Firestore + Storage). Không dùng SQLite làm nguồn chính nữa.

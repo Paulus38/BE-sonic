@@ -44,6 +44,10 @@ export class User {
   @Column({ type: 'varchar', length: 16, default: 'light' })
   theme!: 'light' | 'dark';
 
+  /** RBAC: user | admin */
+  @Column({ type: 'varchar', length: 16, default: 'user' })
+  role!: 'user' | 'admin';
+
   @OneToMany(() => Recording, (recording) => recording.user)
   recordings!: Recording[];
 

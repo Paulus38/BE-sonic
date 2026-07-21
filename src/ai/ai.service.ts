@@ -1,6 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
+import { AiUsageService } from './ai-usage.service';
+import { AiFeature } from '../common/enums';
+
+type UsageMeta = {
+  promptTokenCount?: number;
+  candidatesTokenCount?: number;
+  totalTokenCount?: number;
+};
 
 @Injectable()
 export class AiService {
@@ -9,7 +17,10 @@ export class AiService {
   private readonly model: string;
   private readonly cache = new Map<string, string>();
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly usage: AiUsageService,
+  ) {
     const apiKey = this.config.get<string>('app.geminiApiKey');
     this.model = this.config.get<string>('app.geminiModel') ?? 'gemini-2.0-flash';
     this.client = apiKey ? new GoogleGenAI({ apiKey }) : null;
@@ -22,10 +33,43 @@ export class AiService {
     return !!this.client;
   }
 
+  private extractUsage(response: {
+    usageMetadata?: UsageMeta;
+  }): {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  } {
+    const meta = response.usageMetadata;
+    const promptTokens = meta?.promptTokenCount ?? 0;
+    const completionTokens = meta?.candidatesTokenCount ?? 0;
+    const totalTokens =
+      meta?.totalTokenCount ?? promptTokens + completionTokens;
+    return { promptTokens, completionTokens, totalTokens };
+  }
+
+  private estimateTokens(text: string): number {
+    return Math.max(1, Math.ceil(text.length / 4));
+  }
+
+  private async track(
+    userId: string | undefined,
+    feature: AiFeature,
+    model: string,
+    usage: {
+      promptTokens?: number;
+      completionTokens?: number;
+      totalTokens?: number;
+    },
+  ) {
+    await this.usage.record(userId, feature, model, usage);
+  }
+
   async summarize(
     text: string,
     title: string,
     category: string,
+    userId?: string,
   ): Promise<string> {
     const fallback = this.buildLocalSummary(text, title, category);
     if (!this.client || !text.trim()) {
@@ -33,13 +77,21 @@ export class AiService {
     }
 
     try {
-      const response = await this.client.models.generateContent({
-        model: this.model,
-        contents: `Tóm tắt ngắn gạch đầu dòng tiếng Việt:
+      const prompt = `Tóm tắt ngắn gạch đầu dòng tiếng Việt:
 Tiêu đề: ${title}
 Chủ đề: ${category}
-"""${text.slice(0, 8000)}"""`,
+"""${text.slice(0, 8000)}"""`;
+      const response = await this.client.models.generateContent({
+        model: this.model,
+        contents: prompt,
       });
+      const usage = this.extractUsage(response);
+      if (!usage.totalTokens) {
+        usage.promptTokens = this.estimateTokens(prompt);
+        usage.completionTokens = this.estimateTokens(response.text ?? '');
+        usage.totalTokens = usage.promptTokens + usage.completionTokens;
+      }
+      await this.track(userId, 'summarize', this.model, usage);
       return response.text?.trim() || fallback;
     } catch (err) {
       this.logger.warn(
@@ -66,7 +118,7 @@ Chủ đề: ${category}
    * Prefer free translators first (Gemini often hits free-tier 429),
    * then Gemini. Never echo English as a fake Vietnamese result.
    */
-  async translateLive(text: string): Promise<string> {
+  async translateLive(text: string, userId?: string): Promise<string> {
     const cleaned = text.trim();
     if (!cleaned) return '';
 
@@ -77,7 +129,7 @@ Chủ đề: ${category}
     let translated =
       (await this.translateViaGoogle(cleaned)) ||
       (await this.translateViaMyMemory(cleaned)) ||
-      (await this.translateViaGeminiFast(cleaned));
+      (await this.translateViaGeminiFast(cleaned, userId));
 
     if (!translated || !this.isUsefulVietnamese(cleaned, translated)) {
       translated = '';
@@ -93,15 +145,18 @@ Chủ đề: ${category}
     return translated;
   }
 
-  async translate(text: string, _targetLang = 'Tiếng Việt'): Promise<string> {
-    return this.translateLive(text);
+  async translate(
+    text: string,
+    _targetLang = 'Tiếng Việt',
+    userId?: string,
+  ): Promise<string> {
+    return this.translateLive(text, userId);
   }
 
   private isUsefulVietnamese(source: string, translated: string): boolean {
     const out = translated.trim();
     if (!out) return false;
     if (out.toLowerCase() === source.toLowerCase()) return false;
-    // Prefer results that contain Vietnamese diacritics when source is English
     const hasVi =
       /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(
         out,
@@ -169,7 +224,10 @@ Chủ đề: ${category}
     }
   }
 
-  private async translateViaGeminiFast(text: string): Promise<string | null> {
+  private async translateViaGeminiFast(
+    text: string,
+    userId?: string,
+  ): Promise<string | null> {
     if (!this.client) return null;
     const models = Array.from(
       new Set([
@@ -181,16 +239,24 @@ Chủ đề: ${category}
     );
     for (const model of models) {
       try {
-        const response = await this.client.models.generateContent({
-          model,
-          contents: `Bạn là phiên dịch Anh→Việt chuyên nghiệp (họp/phỏng vấn/học tiếng Anh).
+        const prompt = `Bạn là phiên dịch Anh→Việt chuyên nghiệp (họp/phỏng vấn/học tiếng Anh).
 Dịch tự nhiên, đúng nghĩa, giữ thuật ngữ kỹ thuật nếu phổ biến.
 CHỈ trả về bản dịch tiếng Việt, không giải thích, không ngoặc kép.
 
-EN: ${text.slice(0, 1200)}`,
+EN: ${text.slice(0, 1200)}`;
+        const response = await this.client.models.generateContent({
+          model,
+          contents: prompt,
         });
         const out = response.text?.trim();
         if (!out) continue;
+        const usage = this.extractUsage(response);
+        if (!usage.totalTokens) {
+          usage.promptTokens = this.estimateTokens(prompt);
+          usage.completionTokens = this.estimateTokens(out);
+          usage.totalTokens = usage.promptTokens + usage.completionTokens;
+        }
+        await this.track(userId, 'translate', model, usage);
         return out.replace(/^["«]|["»]$/g, '').trim();
       } catch (err) {
         this.logger.warn(
@@ -205,6 +271,7 @@ EN: ${text.slice(0, 1200)}`,
     audioBase64: string,
     mimeType: string,
     category: string,
+    userId?: string,
   ): Promise<string> {
     if (!this.client) {
       throw new Error('Gemini API key is not configured');
@@ -224,6 +291,15 @@ EN: ${text.slice(0, 1200)}`,
         },
       ],
     });
+
+    const usage = this.extractUsage(response);
+    if (!usage.totalTokens) {
+      // Rough estimate for audio+text when metadata missing
+      usage.promptTokens = Math.ceil(audioBase64.length / 16);
+      usage.completionTokens = this.estimateTokens(response.text ?? '');
+      usage.totalTokens = usage.promptTokens + usage.completionTokens;
+    }
+    await this.track(userId, 'transcribe', this.model, usage);
 
     return (response.text ?? '').trim();
   }

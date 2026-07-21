@@ -11,3 +11,4 @@ data/
 secrets/
 *-firebase-adminsdk*.json
 serviceAccount*.json
+.cursor/

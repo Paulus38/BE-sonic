@@ -16,6 +16,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1091.0",
+    "@aws-sdk/s3-request-presigner": "^3.1091.0",
     "@google/genai": "^2.4.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.0",
@@ -28,6 +30,7 @@
     "@nestjs/throttler": "^6.0.0",
     "@nestjs/typeorm": "^11.0.0",
     "@nestjs/websockets": "^11.0.0",
+    "@vercel/blob": "^2.6.1",
     "bcrypt": "^5.1.1",
     "better-sqlite3": "^12.11.1",
     "class-transformer": "^0.5.1",

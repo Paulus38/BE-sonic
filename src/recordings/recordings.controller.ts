@@ -31,6 +31,7 @@ import {
   CreateRecordingDto,
   FinalizeRecordingDto,
 } from './dto/recording.dto';
+import { MulterFile } from '../common/types/uploaded-file';
 import { StorageService } from '../storage/storage.service';
 
 @ApiTags('recordings')
@@ -106,7 +107,7 @@ export class RecordingsController {
   uploadAudio(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: MulterFile,
   ) {
     this.storageService.assertValidAudio(file);
     return this.recordingsService.attachAudio(user.id, id, file);

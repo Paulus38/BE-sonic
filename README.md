@@ -49,11 +49,14 @@ Object keys: `users/{userId}/recordings/{recordingId}/{uuid}.webm`
 
 Media is **not** stored under `src/` or as primary files in `uploads/`.
 
-## Speech providers
+## Speech / AI
+
+Gemini is used for STT (default), summarize, and translate fallback.
+See **[AI_SETUP.md](./AI_SETUP.md)** for which product features need AI vs free APIs.
 
 | `SPEECH_PROVIDER` | Requires |
 |-------------------|----------|
 | `gemini` (default) | `GEMINI_API_KEY` |
 | `deepgram` | `DEEPGRAM_API_KEY` |
 
-Gemini is also used for translate + summarize.
+Also: [FIREBASE_SETUP.md](./FIREBASE_SETUP.md), [VERCEL_BLOB_SETUP.md](./VERCEL_BLOB_SETUP.md).

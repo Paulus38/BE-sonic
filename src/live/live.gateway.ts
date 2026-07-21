@@ -65,6 +65,7 @@ export class LiveGateway implements OnGatewayConnection, OnGatewayDisconnect {
       recordingId?: string;
       category?: string;
       mode?: 'browser' | 'server';
+      language?: 'en' | 'vi';
     },
   ) {
     const user = client.data.user;
@@ -74,6 +75,7 @@ export class LiveGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     const category = (body.category ?? 'Học Tiếng Anh').slice(0, 64);
     const mode = body.mode === 'server' ? 'server' : 'browser';
+    const language = body.language === 'vi' ? 'vi' : 'en';
 
     const meta = await this.liveService.startSession(
       client.id,
@@ -91,6 +93,7 @@ export class LiveGateway implements OnGatewayConnection, OnGatewayDisconnect {
           event,
         );
       },
+      language,
     );
 
     return { ok: true, ...meta };

@@ -18,7 +18,6 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { User } from '../users/user.entity';
 import { CreateDictionaryItemDto } from './dto/create-dictionary-item.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
-import { ImportDuolingoDto } from './dto/import-duolingo.dto';
 
 @ApiTags('dictionary')
 @ApiBearerAuth()
@@ -35,11 +34,6 @@ export class DictionaryController {
   @Get()
   list(@CurrentUser() user: User, @Query() query: PaginationDto) {
     return this.dictionaryService.list(user.id, query);
-  }
-
-  @Post('import/duolingo')
-  importDuolingo(@CurrentUser() user: User, @Body() dto: ImportDuolingoDto) {
-    return this.dictionaryService.importFromDuolingo(user.id, dto);
   }
 
   @Delete(':id')

@@ -5,6 +5,9 @@ import { SkipThrottle } from '@nestjs/throttler';
 import { AiService } from './ai/ai.service';
 import { SpeechService } from './speech/speech.service';
 import { FirebaseService } from './firebase/firebase.service';
+import { FirestoreStore } from './firestore/firestore-store.service';
+import { R2Service } from './storage/r2.service';
+import { VercelBlobService } from './storage/vercel-blob.service';
 
 @ApiTags('health')
 @Controller('api/v1/health')
@@ -14,23 +17,44 @@ export class HealthController {
     private readonly aiService: AiService,
     private readonly speechService: SpeechService,
     private readonly firebase: FirebaseService,
+    private readonly firestore: FirestoreStore,
+    private readonly r2: R2Service,
+    private readonly vercelBlob: VercelBlobService,
   ) {}
 
   @Get()
   @SkipThrottle()
   check() {
+    const provider = this.vercelBlob.isReady()
+      ? 'vercel-blob'
+      : this.r2.isReady()
+        ? 'r2'
+        : 'local-fallback';
+
     return {
       status: 'ok',
       service: this.config.get<string>('app.name'),
+      dbProvider: this.config.get<string>('app.db.provider') ?? 'firestore',
       speechProvider: this.speechService.getProviderName(),
       geminiActive: this.aiService.isAvailable(),
-        firebase: {
+      storage: {
+        provider,
+        vercelBlob: {
+          ready: this.vercelBlob.isReady(),
+          access: this.vercelBlob.getAccess(),
+          setupHint: this.vercelBlob.isReady()
+            ? null
+            : 'Set BLOB_READ_WRITE_TOKEN — see be/VERCEL_BLOB_SETUP.md',
+        },
+        r2: {
+          ready: this.r2.isReady(),
+          bucket: this.r2.getBucket() || null,
+        },
+      },
+      firebase: {
         projectId: this.firebase.getProjectId(),
-        bucket: this.firebase.getBucketName(),
         ready: this.firebase.isReady(),
-        setupHint: this.firebase.isReady()
-          ? null
-          : 'Add be/secrets/sonic-27ed5-firebase-adminsdk.json — see be/FIREBASE_SETUP.md',
+        firestoreReady: this.firestore.isReady(),
       },
       timestamp: new Date().toISOString(),
     };

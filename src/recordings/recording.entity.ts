@@ -67,6 +67,10 @@ export class Recording {
   @Column({ name: 'audio_mime', type: 'varchar', length: 64, nullable: true })
   audioMime!: string | null;
 
+  /** Byte size of stored audio object (for real storage usage). */
+  @Column({ name: 'audio_bytes', type: 'integer', nullable: true })
+  audioBytes!: number | null;
+
   @OneToMany(() => TranscriptSegment, (segment) => segment.recording, {
     cascade: true,
   })

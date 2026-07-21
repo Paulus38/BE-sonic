@@ -12,6 +12,7 @@ import { RecordingStatus } from '../common/enums';
 import { AiService } from '../ai/ai.service';
 import { StorageService } from '../storage/storage.service';
 import { User } from '../users/user.entity';
+import { MulterFile } from '../common/types/uploaded-file';
 
 @Injectable()
 export class RecordingsService {
@@ -103,6 +104,7 @@ export class RecordingsService {
           source,
           recording.title,
           recording.category,
+          userId,
         );
       } catch {
         recording.aiSummary = this.aiService.buildLocalSummary(
@@ -169,14 +171,21 @@ export class RecordingsService {
   async attachAudio(
     userId: string,
     id: string,
-    file: Express.Multer.File,
+    file: MulterFile,
   ) {
     const recording = await this.requireOwned(userId, id);
     const stored = await this.storageService.saveAudio(userId, id, file);
     recording.audioPath = stored.relativePath;
     recording.audioMime = stored.mimeType;
+    recording.audioBytes = stored.size;
     await this.recordingsRepository.save(recording);
-    return { audioUrl: `/api/v1/recordings/${id}/audio` };
+    return {
+      audioUrl: `/api/v1/recordings/${id}/audio`,
+      storageKey: stored.key,
+      storageProvider: stored.provider,
+      storageBucket: stored.bucket,
+      publicUrl: stored.publicUrl ?? null,
+    };
   }
 
   async getAudioPath(userId: string, id: string) {
@@ -188,7 +197,10 @@ export class RecordingsService {
     return {
       key: recording.audioPath,
       mime: recording.audioMime ?? 'audio/webm',
-      isCloud: recording.audioPath.startsWith('users/'),
+      isCloud:
+        recording.audioPath.startsWith('users/') ||
+        recording.audioPath.includes('blob.vercel-storage.com') ||
+        recording.audioPath.startsWith('https://'),
     };
   }
 
@@ -255,7 +267,7 @@ export class RecordingsService {
     if (recording.audioPath) {
       await this.storageService.deleteIfExists(recording.audioPath);
     }
-    await this.recordingsRepository.softDelete(id, userId);
+    await this.recordingsRepository.hardDelete(id, userId);
   }
 
   async regenerateSummary(userId: string, id: string) {
@@ -270,6 +282,7 @@ export class RecordingsService {
       sourceText,
       recording.title,
       recording.category,
+      userId,
     );
     await this.recordingsRepository.save(recording);
     const latest = await this.recordingsRepository.findByIdForUser(id, userId);

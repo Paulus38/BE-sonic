@@ -33,6 +33,7 @@ export class SpeechService {
   createSession(options: {
     language?: string;
     category?: string;
+    userId?: string;
   }): SpeechSession {
     return this.provider.createSession(options);
   }

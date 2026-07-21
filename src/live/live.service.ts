@@ -23,6 +23,8 @@ export interface LiveSessionState {
   userId: string;
   recordingId: string;
   category: string;
+  /** Spoken language for STT / translation behaviour */
+  language: 'en' | 'vi';
   speech: SpeechSession | null;
   seq: number;
   startedAt: number;
@@ -61,18 +63,24 @@ export class LiveService {
     category: string,
     mode: 'browser' | 'server',
     onTranscript: TranscriptCallback,
-  ): Promise<{ mode: 'browser' | 'server'; provider: string }> {
+    language: 'en' | 'vi' = 'en',
+  ): Promise<{ mode: 'browser' | 'server'; provider: string; language: 'en' | 'vi' }> {
     await this.recordingsService.getOne(user.id, recordingId);
 
     let speech: SpeechSession | null = null;
     if (mode === 'server') {
-      speech = this.speechService.createSession({ category, language: 'en' });
+      speech = this.speechService.createSession({
+        category,
+        language: language === 'vi' ? 'vi' : 'en',
+        userId: user.id,
+      });
     }
 
     const state: LiveSessionState = {
       userId: user.id,
       recordingId,
       category,
+      language,
       speech,
       seq: 0,
       startedAt: Date.now(),
@@ -102,6 +110,7 @@ export class LiveService {
 
     return {
       mode,
+      language,
       provider:
         mode === 'browser' ? 'web-speech' : this.speechService.getProviderName(),
     };
@@ -164,7 +173,7 @@ export class LiveService {
     const tStartMs = Math.max(0, now - 2000);
     const tEndMs = now;
 
-    // 1) Emit English immediately — do not wait for translation
+    // 1) Emit transcript immediately — do not wait for translation
     state.onTranscript({
       type: 'final',
       text,
@@ -187,9 +196,13 @@ export class LiveService {
       },
     );
 
-    // 2) Translate EN→VI in background and push bilingual update
+    // 2) Only translate EN → VI when recording language is English
+    if (state.language !== 'en') {
+      return;
+    }
+
     void this.aiService
-      .translateLive(text)
+      .translateLive(text, user.id)
       .then(async (translation) => {
         if (!translation) {
           this.logger.warn(`No Vietnamese translation for: ${text.slice(0, 80)}`);
