@@ -7,7 +7,46 @@
 | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Push / PR → `main` | `npm ci` → typecheck → build |
 | [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) | Manual (`workflow_dispatch`) | Build gate → deploy Vercel (+ optional Firebase rules) |
 
-## Khuyến nghị CD: Vercel Git Integration
+## Gắn biến môi trường (không commit `.env`)
+
+Projects đã link local:
+
+| Folder | Vercel project | URL |
+|--------|----------------|-----|
+| `be/` | `pala3/be-sonic` | https://be-sonic.vercel.app |
+| `fe/` | `pala3/sonic-scribe` | https://sonic-scribe-sigma.vercel.app |
+
+### Cách nhanh (CLI — khuyến nghị)
+
+Từ thư mục gốc `Record/` (cần đang login `npx vercel whoami`):
+
+```bash
+node scripts/push-vercel-env.mjs
+```
+
+Script sẽ:
+
+- Đọc `be/.env` + `be/secrets/*-firebase-adminsdk.json`
+- Đọc `fe/.env` → `VITE_API_URL`
+- Đẩy lên **production, preview, development**
+- Chỉ in **tên key** (không in giá trị secret)
+- Set `CORS_ORIGINS` gồm FE production + localhost
+- Set `FIREBASE_SERVICE_ACCOUNT_JSON` (thay cho path file local)
+
+Sau đó **Redeploy** trên Vercel (Deployments → … → Redeploy) để biến có hiệu lực.
+
+### Cách Dashboard
+
+1. https://vercel.com/dashboard → project → **Settings → Environment Variables**
+2. Add từng key từ `.env.example` (giá trị lấy từ `.env` local)
+3. Redeploy
+
+### Kiểm tra đã gắn
+
+```bash
+cd be && npx vercel env ls
+cd ../fe && npx vercel env ls
+```
 
 1. Mở [Vercel Dashboard](https://vercel.com/dashboard) → **Add New Project**
 2. Import repo `Paulus38/BE-sonic`
