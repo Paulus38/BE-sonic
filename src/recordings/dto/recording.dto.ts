@@ -93,7 +93,10 @@ export class FinalizeRecordingDto {
   @Type(() => TranscriptLineDto)
   transcript?: TranscriptLineDto[];
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    description:
+      'When true, call Gemini to generate aiSummary. Default false to avoid burning tokens on save.',
+  })
   @IsOptional()
   @IsBoolean()
   generateSummary?: boolean;

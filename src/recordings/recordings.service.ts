@@ -95,7 +95,8 @@ export class RecordingsService {
       }
     }
 
-    if (dto.generateSummary !== false) {
+    // Only call Gemini when FE explicitly requests it (avoids burning free-tier tokens).
+    if (dto.generateSummary === true) {
       try {
         const source =
           recording.summary ||
