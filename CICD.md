@@ -100,7 +100,19 @@ npx firebase deploy --only firestore:rules,storage
 
 Hoặc bật `DEPLOY_FIREBASE_RULES=true` + secret `FIREBASE_TOKEN` rồi chạy workflow Deploy.
 
-## Lưu ý WebSocket / live
+## Lỗi build thường gặp
+
+### `sh: nest: command not found` (exit 127)
+
+Vercel cài `npm ci` với `NODE_ENV=production` → bỏ `devDependencies` (`@nestjs/cli`).
+
+Đã fix trong `vercel.json`:
+
+```json
+"installCommand": "npm ci --include=dev"
+```
+
+Push lên `main` rồi đợi deploy lại, hoặc Redeploy trên Dashboard.
 
 Live `/live` dùng Socket.IO + state in-memory. Trên Vercel Functions (Fluid):
 
