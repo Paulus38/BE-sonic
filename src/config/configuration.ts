@@ -13,7 +13,7 @@ export default registerAs('app', () => ({
   bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS ?? '12', 10),
   speechProvider: process.env.SPEECH_PROVIDER ?? 'gemini',
   geminiApiKey: process.env.GEMINI_API_KEY ?? '',
-  geminiModel: process.env.GEMINI_MODEL ?? 'gemini-2.0-flash',
+  geminiModel: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash-lite',
   deepgramApiKey: process.env.DEEPGRAM_API_KEY ?? '',
   /** Soft display quota for AI token meter (not Google's live rate limit). */
   aiTokenQuota: Math.max(

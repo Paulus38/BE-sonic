@@ -97,4 +97,24 @@ export class GeminiSpeechProvider implements SpeechProvider {
       options.userId,
     );
   }
+
+  async transcribeBuffer(
+    buffer: Buffer,
+    mimeType: string,
+    category = 'general',
+    userId?: string,
+    language?: string,
+  ): Promise<string> {
+    const text = await this.ai.transcribeAudio(
+      buffer.toString('base64'),
+      mimeType || 'audio/webm',
+      category,
+      userId,
+      language,
+    );
+    if (!text.trim()) {
+      throw new Error('Gemini returned empty transcript');
+    }
+    return text.trim();
+  }
 }

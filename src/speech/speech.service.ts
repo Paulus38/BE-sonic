@@ -94,6 +94,73 @@ export class SpeechService implements OnModuleInit {
     return { ...this.latency };
   }
 
+  /**
+   * Offline / file STT for re-transcribe from stored audio.
+   * Prefer Deepgram prerecorded; fallback to Gemini.
+   */
+  async transcribeFile(options: {
+    buffer: Buffer;
+    mimeType: string;
+    language?: string;
+    category?: string;
+    userId?: string;
+  }): Promise<{ text: string; provider: string }> {
+    const language = options.language === 'vi' ? 'vi' : 'en';
+    const mime = options.mimeType || 'audio/webm';
+    let deepgramError: string | null = null;
+
+    if (this.deepgram.isReady()) {
+      try {
+        const text = await this.deepgram.transcribeBuffer(
+          options.buffer,
+          mime,
+          language,
+        );
+        return { text, provider: 'deepgram' };
+      } catch (err) {
+        deepgramError = (err as Error).message;
+        this.logger.warn(`Deepgram file STT failed: ${deepgramError}`);
+      }
+    }
+
+    if (this.gemini.isReady()) {
+      // Gemini inline audio — skip if file is very large
+      if (options.buffer.length > 18 * 1024 * 1024) {
+        throw new Error(
+          deepgramError
+            ? `Deepgram failed (${deepgramError}). Audio too large for Gemini fallback.`
+            : 'Audio too large for Gemini fallback; configure Deepgram or use a shorter clip',
+        );
+      }
+      try {
+        const text = await this.gemini.transcribeBuffer(
+          options.buffer,
+          mime,
+          options.category ?? 'general',
+          options.userId,
+          language,
+        );
+        return { text, provider: 'gemini' };
+      } catch (err) {
+        const geminiError = (err as Error).message;
+        throw new Error(
+          [
+            deepgramError ? `Deepgram: ${deepgramError}` : null,
+            `Gemini: ${geminiError}`,
+          ]
+            .filter(Boolean)
+            .join(' | '),
+        );
+      }
+    }
+
+    throw new Error(
+      deepgramError
+        ? `Deepgram failed: ${deepgramError}. GEMINI_API_KEY missing for fallback.`
+        : 'No speech provider ready — set DEEPGRAM_API_KEY and/or GEMINI_API_KEY',
+    );
+  }
+
   private orderedReadyProviders(): SpeechProvider[] {
     if (this.mode === SpeechProviderType.GEMINI) {
       return this.gemini.isReady() ? [this.gemini] : [];

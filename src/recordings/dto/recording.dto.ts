@@ -101,3 +101,17 @@ export class FinalizeRecordingDto {
   @IsBoolean()
   generateSummary?: boolean;
 }
+
+export class RetranscribeRecordingDto {
+  @ApiPropertyOptional({ enum: ['en', 'vi'], default: 'en' })
+  @IsOptional()
+  @IsString()
+  language?: 'en' | 'vi';
+
+  @ApiPropertyOptional({
+    description: 'Translate EN→VI after STT (free translators first). Default true when language=en.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  translate?: boolean;
+}

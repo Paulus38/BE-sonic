@@ -30,6 +30,7 @@ import { PaginationDto } from '../common/dto/pagination.dto';
 import {
   CreateRecordingDto,
   FinalizeRecordingDto,
+  RetranscribeRecordingDto,
 } from './dto/recording.dto';
 import { MulterFile } from '../common/types/uploaded-file';
 import { StorageService } from '../storage/storage.service';
@@ -77,6 +78,15 @@ export class RecordingsController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.recordingsService.regenerateSummary(user.id, id);
+  }
+
+  @Post(':id/transcribe')
+  retranscribe(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RetranscribeRecordingDto,
+  ) {
+    return this.recordingsService.retranscribe(user.id, id, dto ?? {});
   }
 
   @Post(':id/audio')

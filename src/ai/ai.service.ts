@@ -22,7 +22,7 @@ export class AiService {
     private readonly usage: AiUsageService,
   ) {
     const apiKey = this.config.get<string>('app.geminiApiKey');
-    this.model = this.config.get<string>('app.geminiModel') ?? 'gemini-2.0-flash';
+    this.model = this.config.get<string>('app.geminiModel') ?? 'gemini-2.5-flash-lite';
     this.client = apiKey ? new GoogleGenAI({ apiKey }) : null;
     if (!this.client) {
       this.logger.warn('GEMINI_API_KEY missing — AI features use safe fallbacks');
@@ -289,35 +289,63 @@ EN: ${text.slice(0, 1200)}`;
     mimeType: string,
     category: string,
     userId?: string,
+    language?: string,
   ): Promise<string> {
     if (!this.client) {
       throw new Error('Gemini API key is not configured');
     }
 
-    const response = await this.client.models.generateContent({
-      model: this.model,
-      contents: [
-        {
-          role: 'user',
-          parts: [
+    const models = Array.from(
+      new Set([
+        this.model,
+        'gemini-2.5-flash-lite',
+        'gemini-2.5-flash',
+        'gemini-3-flash-preview',
+        'gemini-flash-latest',
+      ]),
+    );
+
+    const langHint =
+      language === 'vi'
+        ? 'Spoken language is Vietnamese. Transcribe in Vietnamese script.'
+        : language === 'en'
+          ? 'Spoken language is English. Transcribe in English.'
+          : 'Detect the spoken language and transcribe in that language.';
+
+    let lastError = 'Gemini transcription failed';
+    for (const model of models) {
+      try {
+        const response = await this.client.models.generateContent({
+          model,
+          contents: [
             {
-              text: `Transcribe accurately (${category}). Return only spoken words.`,
+              role: 'user',
+              parts: [
+                {
+                  text: `Transcribe accurately (${category}). ${langHint} Return only spoken words — no commentary.`,
+                },
+                { inlineData: { mimeType, data: audioBase64 } },
+              ],
             },
-            { inlineData: { mimeType, data: audioBase64 } },
           ],
-        },
-      ],
-    });
+        });
 
-    const usage = this.extractUsage(response);
-    if (!usage.totalTokens) {
-      // Rough estimate for audio+text when metadata missing
-      usage.promptTokens = Math.ceil(audioBase64.length / 16);
-      usage.completionTokens = this.estimateTokens(response.text ?? '');
-      usage.totalTokens = usage.promptTokens + usage.completionTokens;
+        const usage = this.extractUsage(response);
+        if (!usage.totalTokens) {
+          usage.promptTokens = Math.ceil(audioBase64.length / 16);
+          usage.completionTokens = this.estimateTokens(response.text ?? '');
+          usage.totalTokens = usage.promptTokens + usage.completionTokens;
+        }
+        await this.track(userId, 'transcribe', model, usage);
+
+        const text = (response.text ?? '').trim();
+        if (text) return text;
+        lastError = `Gemini ${model} returned empty transcript`;
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`Gemini transcribe failed (${model}): ${lastError}`);
+      }
     }
-    await this.track(userId, 'transcribe', this.model, usage);
-
-    return (response.text ?? '').trim();
+    throw new Error(lastError);
   }
 }

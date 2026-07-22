@@ -69,6 +69,7 @@ class DeepgramSpeechSession implements SpeechSession {
 @Injectable()
 export class DeepgramSpeechProvider implements SpeechProvider {
   readonly name = 'deepgram';
+  private readonly logger = new Logger(DeepgramSpeechProvider.name);
 
   constructor(private readonly config: ConfigService) {}
 
@@ -101,5 +102,66 @@ export class DeepgramSpeechProvider implements SpeechProvider {
       throw new Error('DEEPGRAM_API_KEY is not configured');
     }
     return new DeepgramSpeechSession(apiKey, options.language ?? 'en');
+  }
+
+  /** Batch / offline file transcription (prerecorded REST). */
+  async transcribeBuffer(
+    buffer: Buffer,
+    mimeType: string,
+    language = 'en',
+  ): Promise<string> {
+    const apiKey = this.config.get<string>('app.deepgramApiKey')?.trim();
+    if (!apiKey) {
+      throw new Error('DEEPGRAM_API_KEY is not configured');
+    }
+    const lang = language === 'vi' ? 'vi' : 'en';
+    const attempts = [
+      `model=nova-2&smart_format=true&punctuate=true&language=${encodeURIComponent(lang)}`,
+      // Fallback: let Deepgram detect language (helps when user picks wrong lang)
+      `model=nova-2&smart_format=true&punctuate=true&detect_language=true`,
+    ];
+
+    let lastError = 'Deepgram returned empty transcript';
+    for (const query of attempts) {
+      const url = `https://api.deepgram.com/v1/listen?${query}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120_000);
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Token ${apiKey}`,
+            'Content-Type': mimeType || 'audio/webm',
+          },
+          body: new Uint8Array(buffer),
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          lastError = `Deepgram HTTP ${res.status}: ${errText.slice(0, 240)}`;
+          this.logger.warn(lastError);
+          continue;
+        }
+        const data = (await res.json()) as {
+          results?: {
+            channels?: Array<{
+              alternatives?: Array<{ transcript?: string }>;
+            }>;
+          };
+        };
+        const text =
+          data.results?.channels?.[0]?.alternatives?.[0]?.transcript?.trim() ??
+          '';
+        if (text) return text;
+        lastError = 'Deepgram returned empty transcript';
+      } catch (err) {
+        lastError =
+          err instanceof Error ? err.message : 'Deepgram request failed';
+        this.logger.warn(lastError);
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+    throw new Error(lastError);
   }
 }

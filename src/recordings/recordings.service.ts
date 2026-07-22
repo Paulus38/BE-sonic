@@ -1,25 +1,33 @@
 import {
+  BadGatewayException,
+  BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { RecordingsRepository } from './recordings.repository';
 import {
   CreateRecordingDto,
   FinalizeRecordingDto,
+  RetranscribeRecordingDto,
 } from './dto/recording.dto';
 import { RecordingStatus } from '../common/enums';
 import { AiService } from '../ai/ai.service';
 import { StorageService } from '../storage/storage.service';
+import { SpeechService } from '../speech/speech.service';
 import { User } from '../users/user.entity';
 import { MulterFile } from '../common/types/uploaded-file';
 
 @Injectable()
 export class RecordingsService {
+  private readonly logger = new Logger(RecordingsService.name);
+
   constructor(
     private readonly recordingsRepository: RecordingsRepository,
     private readonly aiService: AiService,
     private readonly storageService: StorageService,
+    private readonly speechService: SpeechService,
   ) {}
 
   async create(user: User, dto: CreateRecordingDto) {
@@ -288,6 +296,151 @@ export class RecordingsService {
     await this.recordingsRepository.save(recording);
     const latest = await this.recordingsRepository.findByIdForUser(id, userId);
     return this.toDto(latest ?? recording, true);
+  }
+
+  /**
+   * Re-run STT on stored audio (fallback when live transcript failed / empty).
+   * Replaces existing transcript segments.
+   */
+  async retranscribe(
+    userId: string,
+    id: string,
+    dto: RetranscribeRecordingDto = {},
+  ) {
+    const recording = await this.requireOwned(userId, id);
+    if (!recording.audioPath) {
+      throw new BadRequestException(
+        'Bản ghi chưa có audio — không thể transcript lại',
+      );
+    }
+
+    try {
+      const audio = await this.getAudioStream(userId, id);
+      const language = dto.language === 'vi' ? 'vi' : 'en';
+      const { text, provider } = await this.speechService.transcribeFile({
+        buffer: audio.buffer,
+        mimeType: audio.mime || 'audio/webm',
+        language,
+        category: recording.category,
+        userId,
+      });
+
+      const lines = this.splitTranscriptLines(text, recording.durationSec);
+      const wantTranslate =
+        dto.translate !== false && language === 'en';
+
+      const withTranslations: Array<{
+        time: string;
+        speaker: string;
+        text: string;
+        translation: string | null;
+        tStartMs: number;
+        tEndMs: number;
+        isFinal: boolean;
+        seq: number;
+      }> = [];
+
+      for (let idx = 0; idx < lines.length; idx++) {
+        const line = lines[idx];
+        let translation: string | null = null;
+        if (wantTranslate) {
+          try {
+            const vi = await this.aiService.translateLive(line.text, userId);
+            translation = vi || null;
+          } catch {
+            translation = null;
+          }
+        }
+        withTranslations.push({
+          ...line,
+          translation,
+          isFinal: true,
+          seq: idx,
+        });
+      }
+
+      const segments = await this.recordingsRepository.replaceTranscript(
+        recording.id,
+        withTranslations,
+      );
+      recording.transcript = segments;
+      recording.isTranslated = segments.some((s) => !!s.translation);
+      const fullText = segments.map((s) => s.text).join(' ');
+      recording.summary =
+        fullText.slice(0, 150) + (fullText.length > 150 ? '...' : '');
+      recording.status = RecordingStatus.READY;
+      const tags = new Set(recording.tags ?? []);
+      tags.add('Re-transcribed');
+      tags.add(provider);
+      recording.tags = Array.from(tags);
+      await this.recordingsRepository.save(recording);
+
+      const latest = await this.recordingsRepository.findByIdForUser(
+        id,
+        userId,
+      );
+      return {
+        ...this.toDto(latest ?? recording, true),
+        sttProvider: provider,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Retranscribe failed for ${id}: ${msg}`);
+      if (err instanceof BadRequestException) throw err;
+      throw new BadGatewayException(
+        `Transcript lại thất bại: ${msg.slice(0, 400)}`,
+      );
+    }
+  }
+
+  private splitTranscriptLines(
+    text: string,
+    durationSec: number,
+  ): Array<{
+    time: string;
+    speaker: string;
+    text: string;
+    tStartMs: number;
+    tEndMs: number;
+  }> {
+    const cleaned = text.replace(/\s+/g, ' ').trim();
+    if (!cleaned) {
+      return [
+        {
+          time: '00:00',
+          speaker: 'Speaker',
+          text: '(Không nhận diện được lời nói trong audio)',
+          tStartMs: 0,
+          tEndMs: Math.max(0, durationSec) * 1000,
+        },
+      ];
+    }
+
+    const parts = cleaned
+      .split(/(?<=[.!?…。])\s+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    const chunks =
+      parts.length > 0
+        ? parts
+        : cleaned.match(/.{1,220}(\s|$)/g)?.map((s) => s.trim()).filter(Boolean) ||
+          [cleaned];
+
+    const totalMs = Math.max(1000, (durationSec || chunks.length * 3) * 1000);
+    const step = Math.floor(totalMs / chunks.length);
+
+    return chunks.map((chunk, idx) => {
+      const tStartMs = idx * step;
+      const tEndMs = idx === chunks.length - 1 ? totalMs : (idx + 1) * step;
+      return {
+        time: this.formatDuration(Math.floor(tStartMs / 1000)),
+        speaker: 'Speaker',
+        text: chunk,
+        tStartMs,
+        tEndMs,
+      };
+    });
   }
 
   private async requireOwned(userId: string, id: string) {

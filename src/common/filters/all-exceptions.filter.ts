@@ -42,8 +42,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
         const raw = (exceptionResponse as { message: string | string[] })
           .message;
         message = Array.isArray(raw) ? raw.join(', ') : raw;
-      } else if (exception instanceof Error && status < 500) {
-        message = exception.message;
+      } else if (exception instanceof Error) {
+        // Surface operational errors (STT/AI/storage) instead of opaque 500.
+        message = exception.message.slice(0, 500) || message;
       }
     }
 
