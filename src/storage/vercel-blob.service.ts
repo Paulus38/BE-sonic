@@ -6,7 +6,7 @@ import { put, del, get, list } from '@vercel/blob';
 export class VercelBlobService implements OnModuleInit {
   private readonly logger = new Logger(VercelBlobService.name);
   private token = '';
-  private access: 'public' | 'private' = 'private';
+  private access: 'public' | 'private' = 'public';
 
   constructor(private readonly config: ConfigService) {}
 
@@ -17,9 +17,9 @@ export class VercelBlobService implements OnModuleInit {
       ''
     ).trim();
     const access = (
-      this.config.get<string>('app.vercelBlob.access') ?? 'private'
+      this.config.get<string>('app.vercelBlob.access') ?? 'public'
     ).trim();
-    this.access = access === 'public' ? 'public' : 'private';
+    this.access = access === 'private' ? 'private' : 'public';
 
     if (!this.token) {
       this.logger.warn(

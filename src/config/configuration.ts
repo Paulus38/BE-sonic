@@ -39,7 +39,7 @@ export default registerAs('app', () => ({
       process.env.BLOB_READ_WRITE_TOKEN ??
       process.env.VERCEL_BLOB_READ_WRITE_TOKEN ??
       '',
-    access: process.env.BLOB_ACCESS ?? 'private',
+    access: process.env.BLOB_ACCESS ?? 'public',
   },
   firebase: {
     enabled: process.env.FIREBASE_ENABLED !== 'false',

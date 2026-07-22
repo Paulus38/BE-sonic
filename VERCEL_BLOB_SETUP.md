@@ -25,8 +25,8 @@ Nếu chưa có project trên Vercel: tạo project trống (Import Git hoặc C
 
 ```env
 BLOB_READ_WRITE_TOKEN=vercel_blob_rw_xxxxxxxx
-# Khuyến nghị private — FE chỉ nghe qua API đã đăng nhập
-BLOB_ACCESS=private
+# Phải khớp Access của store (Public store → public; Private store → private)
+BLOB_ACCESS=public
 STORAGE_ALLOW_LOCAL_FALLBACK=false
 ```
 
