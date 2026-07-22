@@ -10,7 +10,9 @@ export type AiUsageSummary = {
   totalTokens: number;
   requestCount: number;
   byFeature: Record<string, number>;
+  byModel: Record<string, number>;
   updatedAt: string | null;
+  quotaTokens?: number;
 };
 
 export type AiUsageEvent = {
@@ -54,6 +56,7 @@ export class AiUsageService {
       this.store.requireReady();
       const now = new Date().toISOString();
       const ref = this.store.aiUsage().doc(userId);
+      const modelKey = (model || 'unknown').replace(/[./#[\]]/g, '_');
       await ref.set(
         {
           userId,
@@ -62,6 +65,7 @@ export class AiUsageService {
           totalTokens: FieldValue.increment(totalTokens),
           requestCount: FieldValue.increment(1),
           [`byFeature.${feature}`]: FieldValue.increment(totalTokens),
+          [`byModel.${modelKey}`]: FieldValue.increment(totalTokens),
           updatedAt: now,
         },
         { merge: true },
@@ -95,6 +99,7 @@ export class AiUsageService {
         totalTokens: 0,
         requestCount: 0,
         byFeature: {},
+        byModel: {},
         updatedAt: null,
       };
     }
@@ -106,6 +111,7 @@ export class AiUsageService {
       totalTokens: Number(data.totalTokens ?? 0),
       requestCount: Number(data.requestCount ?? 0),
       byFeature: (data.byFeature as Record<string, number>) ?? {},
+      byModel: (data.byModel as Record<string, number>) ?? {},
       updatedAt: (data.updatedAt as string) ?? null,
     };
   }
@@ -132,6 +138,7 @@ export class AiUsageService {
         totalTokens: Number(data.totalTokens ?? 0),
         requestCount: Number(data.requestCount ?? 0),
         byFeature: (data.byFeature as Record<string, number>) ?? {},
+        byModel: (data.byModel as Record<string, number>) ?? {},
         updatedAt: (data.updatedAt as string) ?? null,
       };
     });

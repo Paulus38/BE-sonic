@@ -15,6 +15,11 @@ export default registerAs('app', () => ({
   geminiApiKey: process.env.GEMINI_API_KEY ?? '',
   geminiModel: process.env.GEMINI_MODEL ?? 'gemini-2.0-flash',
   deepgramApiKey: process.env.DEEPGRAM_API_KEY ?? '',
+  /** Soft display quota for AI token meter (not Google's live rate limit). */
+  aiTokenQuota: Math.max(
+    1_000,
+    parseInt(process.env.AI_TOKEN_QUOTA ?? '1500000', 10) || 1_500_000,
+  ),
   uploadDir: process.env.UPLOAD_DIR ?? './uploads',
   maxAudioMb: parseInt(process.env.MAX_AUDIO_MB ?? '50', 10),
   throttleTtlMs: parseInt(process.env.THROTTLE_TTL_MS ?? '60000', 10),

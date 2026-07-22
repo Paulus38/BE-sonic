@@ -1,5 +1,6 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -17,7 +18,12 @@ export class AiController {
   constructor(
     private readonly usage: AiUsageService,
     private readonly users: UsersService,
+    private readonly config: ConfigService,
   ) {}
+
+  private quotaTokens(): number {
+    return this.config.get<number>('app.aiTokenQuota') ?? 1_500_000;
+  }
 
   @Get('usage')
   async myUsage(@CurrentUser() user: User) {
@@ -25,7 +31,13 @@ export class AiController {
       this.usage.getSummary(user.id),
       this.usage.getEvents(user.id, 40),
     ]);
-    return { summary, events };
+    const quotaTokens = this.quotaTokens();
+    return {
+      summary: { ...summary, quotaTokens },
+      events,
+      usedTokens: summary.totalTokens,
+      quotaTokens,
+    };
   }
 
   @Get('usage/all')
