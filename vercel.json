@@ -1,10 +1,6 @@
 {
-  "functions": {
-    "api/**/*.js": {
-      "maxDuration": 120
-    },
-    "dist/**/*.js": {
-      "maxDuration": 120
-    }
-  }
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nestjs",
+  "installCommand": "npm ci --include=dev",
+  "buildCommand": "npm run build"
 }
