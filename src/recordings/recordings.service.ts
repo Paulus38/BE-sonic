@@ -348,6 +348,7 @@ export class RecordingsService {
         month: 'long',
         year: 'numeric',
       }),
+      createdAt: recording.createdAt.toISOString(),
       duration: recording.duration,
       durationSec: recording.durationSec,
       summary: recording.summary,

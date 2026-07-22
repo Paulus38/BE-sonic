@@ -1,10 +1,11 @@
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
-  IsEnum,
   IsInt,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
   ValidateNested,
@@ -29,31 +30,37 @@ export class CreateRecordingDto {
 export class TranscriptLineDto {
   @ApiProperty()
   @IsString()
+  @MaxLength(32)
   time!: string;
 
   @ApiProperty()
   @IsString()
+  @MaxLength(64)
   speaker!: string;
 
   @ApiProperty()
   @IsString()
+  @MaxLength(4000)
   text!: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  @MaxLength(4000)
   translation?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsInt()
   @Min(0)
+  @Max(86_400_000)
   tStartMs?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsInt()
   @Min(0)
+  @Max(86_400_000)
   tEndMs?: number;
 }
 
@@ -73,11 +80,15 @@ export class FinalizeRecordingDto {
   @ApiProperty()
   @IsInt()
   @Min(0)
+  @Max(86_400)
   durationSec!: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    description: 'Max 3000 lines to prevent oversized writes / AI cost abuse',
+  })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(3000)
   @ValidateNested({ each: true })
   @Type(() => TranscriptLineDto)
   transcript?: TranscriptLineDto[];

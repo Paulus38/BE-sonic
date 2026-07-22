@@ -64,16 +64,15 @@ export class UsersService {
     return this.ensureAdminBootstrap(user);
   }
 
-  /** Promote users listed in ADMIN_EMAILS even if created before RBAC. */
+  /** One-time role fill for legacy users. Never re-promotes demoted admins. */
   private async ensureAdminBootstrap(user: User): Promise<User> {
-    if (this.isAdminEmail(user.email) && user.role !== UserRole.ADMIN) {
-      user.role = UserRole.ADMIN;
-      return this.usersRepository.save(user);
+    if (user.role) {
+      return user;
     }
-    if (!user.role) {
-      user.role = UserRole.USER;
-    }
-    return user;
+    user.role = this.isAdminEmail(user.email)
+      ? UserRole.ADMIN
+      : UserRole.USER;
+    return this.usersRepository.save(user);
   }
 
   async validatePassword(user: User, password: string): Promise<boolean> {

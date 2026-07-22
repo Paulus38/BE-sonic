@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   UseGuards,
@@ -45,7 +46,7 @@ export class AdminController {
   @Patch('users/:id')
   updateUser(
     @CurrentUser() actor: User,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AdminUpdateUserDto,
   ) {
     return this.usersService.adminUpdateUser(id, actor.id, dto);
@@ -54,7 +55,7 @@ export class AdminController {
   @Patch('users/:id/role')
   setRole(
     @CurrentUser() actor: User,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateRoleDto,
   ) {
     return this.usersService.setRole(id, dto.role, actor.id);
@@ -64,7 +65,7 @@ export class AdminController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteUser(
     @CurrentUser() actor: User,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ) {
     await this.usersService.adminDeleteUser(id, actor.id);
   }

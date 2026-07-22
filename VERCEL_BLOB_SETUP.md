@@ -15,7 +15,7 @@ https://xxxxx.public.blob.vercel-storage.com/users/.../recording.webm
    (hoặc từ team `pala3`: Storage → Create → **Blob**)  
 3. **Create Database / Create Blob store**
    - Name: `sonic-audio` (tuỳ chọn)
-   - Access: **Public** (đơn giản cho demo) hoặc Private
+   - Access: **Private** (khuyến nghị) — audio chỉ tải qua BE đã auth
 4. Chọn project để gắn env (hoặc copy token thủ công)
 5. Copy biến **`BLOB_READ_WRITE_TOKEN`** (dạng `vercel_blob_rw_...`)
 
@@ -25,9 +25,9 @@ Nếu chưa có project trên Vercel: tạo project trống (Import Git hoặc C
 
 ```env
 BLOB_READ_WRITE_TOKEN=vercel_blob_rw_xxxxxxxx
-# public | private — phải khớp loại store
-BLOB_ACCESS=public
-STORAGE_ALLOW_LOCAL_FALLBACK=true
+# Khuyến nghị private — FE chỉ nghe qua API đã đăng nhập
+BLOB_ACCESS=private
+STORAGE_ALLOW_LOCAL_FALLBACK=false
 ```
 
 ## 3) Restart BE
@@ -42,7 +42,7 @@ Check: `GET http://localhost:3001/api/v1/health`
 ```json
 "storage": {
   "provider": "vercel-blob",
-  "vercelBlob": { "ready": true, "access": "public" }
+  "vercelBlob": { "ready": true, "access": "private" }
 }
 ```
 

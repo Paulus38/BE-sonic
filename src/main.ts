@@ -40,19 +40,28 @@ async function bootstrap() {
     }),
   );
 
-  const swagger = new DocumentBuilder()
-    .setTitle('Sonic Scribe API')
-    .setDescription('Realtime speech-to-text backend')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, swagger));
+  const swaggerEnabled = config.get<boolean>('app.swaggerEnabled') ?? false;
+  if (swaggerEnabled) {
+    const swagger = new DocumentBuilder()
+      .setTitle('Sonic Scribe API')
+      .setDescription('Realtime speech-to-text backend')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
+    SwaggerModule.setup(
+      'docs',
+      app,
+      SwaggerModule.createDocument(app, swagger),
+    );
+  }
 
   await app.listen(port, '0.0.0.0');
   // eslint-disable-next-line no-console
   console.log(`Sonic Scribe API listening on http://0.0.0.0:${port}`);
-  // eslint-disable-next-line no-console
-  console.log(`Swagger docs: http://localhost:${port}/docs`);
+  if (swaggerEnabled) {
+    // eslint-disable-next-line no-console
+    console.log(`Swagger docs: http://localhost:${port}/docs`);
+  }
 }
 
 bootstrap();

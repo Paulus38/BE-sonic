@@ -62,7 +62,7 @@ export class StorageService {
       this.config.get<string>('app.uploadDir') ?? './uploads',
     );
     this.allowLocalFallback =
-      (process.env.STORAGE_ALLOW_LOCAL_FALLBACK ?? 'true') !== 'false';
+      (process.env.STORAGE_ALLOW_LOCAL_FALLBACK ?? 'false') === 'true';
   }
 
   assertValidAudio(file?: MulterFile): void {
@@ -258,24 +258,18 @@ export class StorageService {
   async download(
     key: string,
   ): Promise<{ buffer: Buffer; contentType: string }> {
-    if (this.vercelBlob.isVercelBlobRef(key) || key.startsWith('https://')) {
-      if (this.vercelBlob.isReady() && this.vercelBlob.isVercelBlobRef(key)) {
-        return this.vercelBlob.download(key);
+    // Only allow HTTPS fetch for known Vercel Blob hosts (prevent SSRF).
+    if (this.vercelBlob.isVercelBlobRef(key)) {
+      if (!this.vercelBlob.isReady()) {
+        throw new ServiceUnavailableException(
+          'Vercel Blob chưa cấu hình — không tải được audio.',
+        );
       }
-      // Generic HTTPS (e.g. public blob URL)
-      if (key.startsWith('https://')) {
-        const res = await fetch(key);
-        if (!res.ok) {
-          throw new ServiceUnavailableException(
-            `Không tải được audio URL (${res.status})`,
-          );
-        }
-        return {
-          buffer: Buffer.from(await res.arrayBuffer()),
-          contentType:
-            res.headers.get('content-type') || 'application/octet-stream',
-        };
-      }
+      return this.vercelBlob.download(key);
+    }
+
+    if (key.startsWith('https://') || key.startsWith('http://')) {
+      throw new BadRequestException('Unsupported audio URL host');
     }
 
     if (key.startsWith('users/')) {
