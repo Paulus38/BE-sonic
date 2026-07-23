@@ -14,18 +14,26 @@ import { FirebaseService } from '../firebase/firebase.service';
 import { FirestoreStore } from '../firestore/firestore-store.service';
 import { MulterFile } from '../common/types/uploaded-file';
 
-const ALLOWED_MIME = new Set([
+/** Strip `;codecs=opus` etc. so Chrome MediaRecorder types match allowlist. */
+export function normalizeMimeType(mime: string): string {
+  return (mime || '').split(';')[0].trim().toLowerCase();
+}
+
+const ALLOWED_AUDIO_MIME = new Set([
   'audio/webm',
   'audio/wav',
   'audio/mpeg',
   'audio/mp4',
   'audio/ogg',
   'audio/x-wav',
+  'audio/aac',
+  'audio/x-m4a',
   'video/webm',
-  'image/jpeg',
-  'image/png',
-  'image/webp',
 ]);
+
+export function isAllowedAudioMime(mime: string): boolean {
+  return ALLOWED_AUDIO_MIME.has(normalizeMimeType(mime));
+}
 
 export type StoredObject = {
   /** Path/URL stored in Firestore audioPath */
@@ -67,13 +75,20 @@ export class StorageService {
 
   assertValidAudio(file?: MulterFile): void {
     if (!file) {
-      throw new BadRequestException('Audio file is required');
+      throw new BadRequestException('Cần file âm thanh để upload');
     }
-    if (!ALLOWED_MIME.has(file.mimetype)) {
-      throw new BadRequestException('Unsupported audio type');
+    const base = normalizeMimeType(file.mimetype);
+    if (!isAllowedAudioMime(base)) {
+      throw new BadRequestException(
+        `Định dạng audio không hỗ trợ (${file.mimetype || 'unknown'}). Dùng webm/mp4/wav/ogg/aac.`,
+      );
     }
+    // Persist base type so Blob metadata / extension stay clean.
+    file.mimetype = base;
     if (file.size > this.maxBytes) {
-      throw new BadRequestException('Audio file exceeds size limit');
+      throw new BadRequestException(
+        `File audio vượt giới hạn ${Math.round(this.maxBytes / (1024 * 1024))}MB`,
+      );
     }
   }
 
@@ -471,10 +486,13 @@ export class StorageService {
   }
 
   private extensionFor(mime: string): string {
-    if (mime.includes('wav')) return '.wav';
-    if (mime.includes('mpeg')) return '.mp3';
-    if (mime.includes('ogg')) return '.ogg';
-    if (mime.includes('mp4')) return '.m4a';
+    const base = normalizeMimeType(mime);
+    if (base.includes('wav')) return '.wav';
+    if (base.includes('mpeg')) return '.mp3';
+    if (base.includes('ogg')) return '.ogg';
+    if (base.includes('mp4') || base.includes('m4a') || base.includes('aac')) {
+      return '.m4a';
+    }
     return '.webm';
   }
 }

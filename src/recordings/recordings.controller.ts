@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -33,7 +34,10 @@ import {
   RetranscribeRecordingDto,
 } from './dto/recording.dto';
 import { MulterFile } from '../common/types/uploaded-file';
-import { StorageService } from '../storage/storage.service';
+import {
+  isAllowedAudioMime,
+  StorageService,
+} from '../storage/storage.service';
 
 @ApiTags('recordings')
 @ApiBearerAuth()
@@ -101,16 +105,16 @@ export class RecordingsController {
     FileInterceptor('file', {
       limits: { fileSize: 50 * 1024 * 1024 },
       fileFilter: (_req, file, cb) => {
-        const ok = [
-          'audio/webm',
-          'audio/wav',
-          'audio/mpeg',
-          'audio/mp4',
-          'audio/ogg',
-          'audio/x-wav',
-          'video/webm',
-        ].includes(file.mimetype);
-        cb(ok ? null : new Error('Unsupported audio type'), ok);
+        if (isAllowedAudioMime(file.mimetype)) {
+          cb(null, true);
+          return;
+        }
+        cb(
+          new BadRequestException(
+            `Định dạng audio không hỗ trợ (${file.mimetype || 'unknown'}). Dùng webm/mp4/wav/ogg/aac.`,
+          ),
+          false,
+        );
       },
     }),
   )

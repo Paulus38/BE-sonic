@@ -241,32 +241,44 @@ export class RecordingsRepository {
   ): Promise<TranscriptSegment[]> {
     this.store.requireReady();
     const existing = await this.store.segments(recordingId).get();
-    const batch = this.store.db().batch();
-    for (const doc of existing.docs) {
-      batch.delete(doc.ref);
+    // Firestore max 500 ops per batch — chunk deletes + writes.
+    const BATCH_LIMIT = 450;
+    const deleteRefs = existing.docs.map((d) => d.ref);
+    for (let i = 0; i < deleteRefs.length; i += BATCH_LIMIT) {
+      const batch = this.store.db().batch();
+      for (const ref of deleteRefs.slice(i, i + BATCH_LIMIT)) {
+        batch.delete(ref);
+      }
+      await batch.commit();
     }
+
     const created: TranscriptSegment[] = [];
-    for (let idx = 0; idx < segments.length; idx++) {
-      const s = segments[idx];
-      const id = s.id || this.store.newId();
-      const createdAt = new Date();
-      const doc: SegmentDoc = {
-        id,
-        recordingId,
-        time: s.time ?? '00:00',
-        tStartMs: s.tStartMs ?? 0,
-        tEndMs: s.tEndMs ?? 0,
-        speaker: s.speaker ?? 'Speaker',
-        text: s.text ?? '',
-        translation: s.translation ?? null,
-        isFinal: s.isFinal ?? true,
-        seq: s.seq ?? idx,
-        createdAt: createdAt.toISOString(),
-      };
-      batch.set(this.store.segments(recordingId).doc(id), doc);
-      created.push(this.fromSegmentDoc(doc));
+    for (let i = 0; i < segments.length; i += BATCH_LIMIT) {
+      const batch = this.store.db().batch();
+      const slice = segments.slice(i, i + BATCH_LIMIT);
+      for (let j = 0; j < slice.length; j++) {
+        const idx = i + j;
+        const s = slice[j];
+        const id = s.id || this.store.newId();
+        const createdAt = new Date();
+        const doc: SegmentDoc = {
+          id,
+          recordingId,
+          time: s.time ?? '00:00',
+          tStartMs: s.tStartMs ?? 0,
+          tEndMs: s.tEndMs ?? 0,
+          speaker: s.speaker ?? 'Speaker',
+          text: s.text ?? '',
+          translation: s.translation ?? null,
+          isFinal: s.isFinal ?? true,
+          seq: s.seq ?? idx,
+          createdAt: createdAt.toISOString(),
+        };
+        batch.set(this.store.segments(recordingId).doc(id), doc);
+        created.push(this.fromSegmentDoc(doc));
+      }
+      await batch.commit();
     }
-    await batch.commit();
     return created;
   }
 

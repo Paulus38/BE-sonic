@@ -45,6 +45,19 @@ export class AllExceptionsFilter implements ExceptionFilter {
       } else if (exception instanceof Error) {
         // Surface operational errors (STT/AI/storage) instead of opaque 500.
         message = exception.message.slice(0, 500) || message;
+        // Multer size / unexpected upload errors
+        const code =
+          'code' in exception
+            ? String((exception as { code?: string }).code ?? '')
+            : '';
+        if (code === 'LIMIT_FILE_SIZE') {
+          status = HttpStatus.BAD_REQUEST;
+          message = 'File audio vượt giới hạn upload (tối đa 50MB)';
+        } else if (
+          /Unsupported audio|Định dạng audio không hỗ trợ/i.test(message)
+        ) {
+          status = HttpStatus.BAD_REQUEST;
+        }
       }
     }
 
