@@ -183,18 +183,7 @@ export class LiveService {
       tEndMs,
     });
 
-    const segment = await this.recordingsService.appendFinalSegment(
-      user.id,
-      state.recordingId,
-      {
-        text,
-        translation: undefined,
-        speaker,
-        tStartMs,
-        tEndMs,
-        seq,
-      },
-    );
+    // Skip mid-session DB writes — FE keeps lines; finalize writes after audio OK.
 
     // 2) Only translate EN → VI when recording language is English
     if (state.language !== 'en') {
@@ -203,22 +192,10 @@ export class LiveService {
 
     void this.aiService
       .translateLive(text, user.id)
-      .then(async (translation) => {
+      .then((translation) => {
         if (!translation) {
           this.logger.warn(`No Vietnamese translation for: ${text.slice(0, 80)}`);
           return;
-        }
-        try {
-          await this.recordingsService.updateSegmentTranslation(
-            user.id,
-            state.recordingId,
-            segment.id,
-            translation,
-          );
-        } catch (err) {
-          this.logger.debug(
-            `Persist translation failed: ${err instanceof Error ? err.message : String(err)}`,
-          );
         }
         state.onTranscript({
           type: 'translation',

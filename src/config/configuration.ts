@@ -21,7 +21,8 @@ export default registerAs('app', () => ({
     parseInt(process.env.AI_TOKEN_QUOTA ?? '1500000', 10) || 1_500_000,
   ),
   uploadDir: process.env.UPLOAD_DIR ?? './uploads',
-  maxAudioMb: parseInt(process.env.MAX_AUDIO_MB ?? '50', 10),
+  /** Meetings can be long; client uploads bypass the ~4.5MB serverless body limit. */
+  maxAudioMb: parseInt(process.env.MAX_AUDIO_MB ?? '200', 10),
   throttleTtlMs: parseInt(process.env.THROTTLE_TTL_MS ?? '60000', 10),
   throttleLimit: parseInt(process.env.THROTTLE_LIMIT ?? '120', 10),
   /** Live WS soft limits (per connection) */

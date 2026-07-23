@@ -48,6 +48,17 @@ Check: `GET http://localhost:3001/api/v1/health`
 
 ## 4) Luồng
 
+### A) Client upload (khuyến nghị — cuộc họp dài / file > ~4.5MB)
+
+Vercel Hobby Function chỉ nhận body ~**4.5MB**. File audio dài phải upload **trực tiếp từ trình duyệt → Vercel Blob**:
+
+1. `GET /api/v1/recordings/:id/audio/upload-info` → pathname + access  
+2. Browser `upload()` (`@vercel/blob/client`) → `POST .../audio/client-upload` (token) → Blob  
+3. `POST .../audio/confirm` `{ url }` → Firestore `audioPath`  
+4. `POST .../finalize` — **chỉ thành công khi đã có audio**
+
+### B) Server multipart (file nhỏ / không có Blob)
+
 1. `POST /api/v1/recordings/:id/audio` → `put()` lên Vercel Blob  
 2. Firestore `audioPath` = blob URL  
 3. `GET /api/v1/recordings/:id/audio` → BE tải từ Blob → stream cho FE  
@@ -59,3 +70,4 @@ Xem file trên dashboard: Storage → store → Browser (dán URL).
 - Hobby ~1 GB — ghi âm dài sẽ đầy nhanh  
 - Quá quota Hobby → bị tạm khóa tới kỳ sau  
 - Token **không commit** git  
+- `MAX_AUDIO_MB` mặc định **200** (cuộc họp) 

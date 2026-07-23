@@ -20,6 +20,7 @@ class GeminiSpeechSession implements SpeechSession {
     private readonly ai: AiService,
     private readonly category: string,
     private readonly userId?: string,
+    private readonly language?: string,
   ) {}
 
   async start(onResult: (result: TranscriptResult) => void): Promise<void> {
@@ -57,6 +58,7 @@ class GeminiSpeechSession implements SpeechSession {
         this.mimeType,
         this.category,
         this.userId,
+        this.language,
       );
       if (text && this.onResult) {
         this.onResult({ text, isFinal: true });
@@ -95,6 +97,7 @@ export class GeminiSpeechProvider implements SpeechProvider {
       this.ai,
       options.category ?? 'general',
       options.userId,
+      options.language === 'vi' ? 'vi' : options.language === 'en' ? 'en' : undefined,
     );
   }
 

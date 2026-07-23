@@ -19,9 +19,14 @@ class DeepgramSpeechSession implements SpeechSession {
 
   async start(onResult: (result: TranscriptResult) => void): Promise<void> {
     this.onResult = onResult;
+    const lang = this.language === 'vi' ? 'vi' : 'en';
+    // endpointing helps Vietnamese utterance boundaries (more silence gaps)
+    const endpointing = lang === 'vi' ? 400 : 300;
     const url =
       `wss://api.deepgram.com/v1/listen?model=nova-2&smart_format=true` +
-      `&interim_results=true&language=${encodeURIComponent(this.language)}` +
+      `&punctuate=true&interim_results=true` +
+      `&language=${encodeURIComponent(lang)}` +
+      `&endpointing=${endpointing}` +
       `&encoding=linear16&sample_rate=16000`;
 
     await new Promise<void>((resolve, reject) => {
@@ -101,7 +106,8 @@ export class DeepgramSpeechProvider implements SpeechProvider {
     if (!apiKey) {
       throw new Error('DEEPGRAM_API_KEY is not configured');
     }
-    return new DeepgramSpeechSession(apiKey, options.language ?? 'en');
+    const language = options.language === 'vi' ? 'vi' : 'en';
+    return new DeepgramSpeechSession(apiKey, language);
   }
 
   /** Batch / offline file transcription (prerecorded REST). */

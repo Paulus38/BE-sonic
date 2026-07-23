@@ -8,17 +8,25 @@ import {
 } from '@nestjs/common';
 import { RecordingsRepository } from './recordings.repository';
 import {
+  ConfirmClientAudioDto,
   CreateRecordingDto,
   FinalizeRecordingDto,
   RetranscribeRecordingDto,
 } from './dto/recording.dto';
 import { RecordingStatus } from '../common/enums';
 import { AiService } from '../ai/ai.service';
-import { StorageService } from '../storage/storage.service';
+import {
+  isAllowedAudioMime,
+  normalizeMimeType,
+  StorageService,
+} from '../storage/storage.service';
 import { SpeechService } from '../speech/speech.service';
 import { AuditService } from '../audit/audit.service';
 import { User } from '../users/user.entity';
 import { MulterFile } from '../common/types/uploaded-file';
+import { VercelBlobService } from '../storage/vercel-blob.service';
+import { randomUUID } from 'crypto';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class RecordingsService {
@@ -28,10 +36,13 @@ export class RecordingsService {
     private readonly recordingsRepository: RecordingsRepository,
     private readonly aiService: AiService,
     private readonly storageService: StorageService,
+    private readonly vercelBlob: VercelBlobService,
+    private readonly config: ConfigService,
     private readonly speechService: SpeechService,
     private readonly audit: AuditService,
   ) {}
 
+  /** Draft khi bắt đầu ghi — status=RECORDING, chưa có audio/transcript. */
   async create(user: User, dto: CreateRecordingDto) {
     const recording = this.recordingsRepository.create({
       userId: user.id,
@@ -59,6 +70,7 @@ export class RecordingsService {
     return this.toDto(saved);
   }
 
+  /** Chi tiết + transcript segments — Detail / player. */
   async getOne(userId: string, id: string) {
     const recording = await this.recordingsRepository.findByIdForUser(
       id,
@@ -70,8 +82,17 @@ export class RecordingsService {
     return this.toDto(recording, true);
   }
 
+  /**
+   * Ghi metadata + transcript sau khi audio đã có trên storage.
+   * Atomic rule: reject nếu !audioPath. FE chỉ gọi sau uploadAudio OK.
+   */
   async finalize(userId: string, id: string, dto: FinalizeRecordingDto) {
     const recording = await this.requireOwned(userId, id);
+    if (!recording.audioPath) {
+      throw new BadRequestException(
+        'Chưa có file audio — upload audio thành công rồi mới lưu transcript/metadata',
+      );
+    }
     recording.status = RecordingStatus.PROCESSING;
     if (dto.title) recording.title = dto.title.trim();
     if (dto.category) recording.category = dto.category;
@@ -158,6 +179,11 @@ export class RecordingsService {
     return this.toDto(full ?? saved, true);
   }
 
+  /**
+   * @deprecated UNUSED — live session không còn ghi segment mid-flight (atomic save).
+   * Trước đây: LiveService.commitFinal → append từng câu vào Firestore.
+   * Giờ transcript chỉ vào DB qua finalize(). Có thể xóa cùng updateSegmentTranslation.
+   */
   async appendFinalSegment(
     userId: string,
     recordingId: string,
@@ -185,6 +211,10 @@ export class RecordingsService {
     return this.recordingsRepository.saveSegment(segment);
   }
 
+  /**
+   * @deprecated UNUSED — không còn caller sau khi bỏ persist mid-session.
+   * Trước đây cập nhật bản dịch EN→VI cho segment đã append.
+   */
   async updateSegmentTranslation(
     userId: string,
     recordingId: string,
@@ -199,6 +229,11 @@ export class RecordingsService {
     );
   }
 
+  /**
+   * Server multipart upload (fallback). Nest nhận file → StorageService.saveAudio.
+   * Dùng khi Blob chưa sẵn sàng hoặc FE fallback file nhỏ.
+   * API: POST /:id/audio
+   */
   async attachAudio(
     userId: string,
     id: string,
@@ -227,6 +262,157 @@ export class RecordingsService {
       storageProvider: stored.provider,
       storageBucket: stored.bucket,
       publicUrl: stored.publicUrl ?? null,
+    };
+  }
+
+  /**
+   * Client-upload bước 1 — pathname + access cho browser.
+   * API: GET /:id/audio/upload-info
+   */
+  async getClientUploadInfo(
+    userId: string,
+    id: string,
+    preferredMime?: string,
+  ) {
+    await this.requireOwned(userId, id);
+    const maxMb = this.config.get<number>('app.maxAudioMb') ?? 200;
+    const mime = normalizeMimeType(preferredMime || 'audio/webm');
+    const ext = mime.includes('mp4')
+      ? '.mp4'
+      : mime.includes('aac')
+        ? '.aac'
+        : mime.includes('ogg')
+          ? '.ogg'
+          : mime.includes('wav')
+            ? '.wav'
+            : '.webm';
+    return {
+      clientUpload: this.vercelBlob.isReady(),
+      access: this.vercelBlob.getAccess(),
+      pathname: `users/${userId}/recordings/${id}/${randomUUID()}${ext}`,
+      maxBytes: maxMb * 1024 * 1024,
+      allowedContentTypes: [
+        'audio/webm',
+        'audio/wav',
+        'audio/mpeg',
+        'audio/mp4',
+        'audio/ogg',
+        'audio/aac',
+        'audio/x-wav',
+        'audio/x-m4a',
+        'video/webm',
+      ],
+    };
+  }
+
+  /**
+   * Client-upload bước 2 — generate token (@vercel/blob handleUpload).
+   * API: POST /:id/audio/client-upload (raw JSON)
+   */
+  async handleClientUploadToken(
+    userId: string,
+    id: string,
+    body: unknown,
+    request: import('express').Request,
+  ) {
+    await this.requireOwned(userId, id);
+    if (!this.vercelBlob.isReady()) {
+      throw new BadGatewayException(
+        'Vercel Blob chưa cấu hình — không dùng được client upload',
+      );
+    }
+    const { handleUpload } = await import('@vercel/blob/client');
+    const maxMb = this.config.get<number>('app.maxAudioMb') ?? 200;
+    const prefix = `users/${userId}/recordings/${id}/`;
+    return handleUpload({
+      body: body as Parameters<typeof handleUpload>[0]['body'],
+      request,
+      token: this.vercelBlob.getToken(),
+      onBeforeGenerateToken: async (pathname) => {
+        if (!pathname.startsWith(prefix)) {
+          throw new BadRequestException(
+            `pathname phải thuộc ${prefix}`,
+          );
+        }
+        return {
+          allowedContentTypes: [
+            'audio/webm',
+            'audio/wav',
+            'audio/mpeg',
+            'audio/mp4',
+            'audio/ogg',
+            'audio/aac',
+            'audio/x-wav',
+            'audio/x-m4a',
+            'video/webm',
+          ],
+          maximumSizeInBytes: maxMb * 1024 * 1024,
+          addRandomSuffix: false,
+          allowOverwrite: true,
+          tokenPayload: JSON.stringify({ userId, recordingId: id }),
+        };
+      },
+    });
+  }
+
+  /**
+   * Client-upload bước 3 — gắn Blob URL vào recording.audioPath.
+   * API: POST /:id/audio/confirm
+   * Chưa finalize transcript — chỉ đánh dấu audio đã lưu.
+   */
+  async attachClientAudio(
+    userId: string,
+    id: string,
+    dto: ConfirmClientAudioDto,
+  ) {
+    const recording = await this.requireOwned(userId, id);
+    const url = (dto.url || '').trim();
+    if (!url.startsWith('https://') || !this.vercelBlob.isVercelBlobRef(url)) {
+      throw new BadRequestException('URL audio không hợp lệ (cần Vercel Blob)');
+    }
+    const prefix = `users/${userId}/recordings/${id}/`;
+    if (!url.includes(prefix) && !decodeURIComponent(url).includes(prefix)) {
+      throw new BadRequestException('URL audio không thuộc bản ghi này');
+    }
+    const mime = normalizeMimeType(dto.contentType || 'audio/webm');
+    if (!isAllowedAudioMime(mime)) {
+      throw new BadRequestException(`MIME không hỗ trợ: ${mime}`);
+    }
+    const maxMb = this.config.get<number>('app.maxAudioMb') ?? 200;
+    const size = dto.size ?? 0;
+    if (size > maxMb * 1024 * 1024) {
+      throw new BadRequestException(`File vượt giới hạn ${maxMb}MB`);
+    }
+
+    if (recording.audioPath && recording.audioPath !== url) {
+      try {
+        await this.storageService.deleteIfExists(recording.audioPath);
+      } catch {
+        // ignore stale cleanup
+      }
+    }
+
+    recording.audioPath = url;
+    recording.audioMime = mime;
+    recording.audioBytes = size || recording.audioBytes || null;
+    await this.recordingsRepository.save(recording);
+    void this.audit.record({
+      userId,
+      action: 'recording.audio_upload',
+      resource: 'audio',
+      resourceId: id,
+      meta: {
+        bytes: size || null,
+        mime,
+        provider: 'vercel-blob',
+        via: 'client-upload',
+      },
+    });
+    return {
+      audioUrl: `/api/v1/recordings/${id}/audio`,
+      storageKey: url,
+      storageProvider: 'vercel-blob',
+      publicUrl: url,
     };
   }
 
@@ -273,12 +459,28 @@ export class RecordingsService {
     };
   }
 
-  /** Finalize sessions left in `recording` status so they appear in library */
+  /** Auto-complete abandoned sessions only when audio already uploaded. */
   private async promoteStuckRecordings(userId: string) {
     const stuck = await this.recordingsRepository.findStuckRecording(userId);
     for (const recording of stuck) {
       const ageMs = Date.now() - new Date(recording.createdAt).getTime();
       if (ageMs < 2 * 60 * 1000) continue; // still actively recording
+      // No audio → discard draft so library never shows transcript-only orphans
+      if (!recording.audioPath) {
+        if (ageMs > 30 * 60 * 1000) {
+          try {
+            await this.recordingsRepository.hardDelete(recording.id, userId);
+            this.logger.log(
+              `Deleted abandoned recording without audio: ${recording.id}`,
+            );
+          } catch (err) {
+            this.logger.warn(
+              `Cleanup abandoned recording failed: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+        }
+        continue;
+      }
       recording.status = RecordingStatus.READY;
       if (!recording.summary) {
         const full = await this.recordingsRepository.findByIdForUser(

@@ -182,6 +182,10 @@ export class RecordingsRepository {
     return { affected: 1 };
   }
 
+  /**
+   * @deprecated Chỉ dùng bởi RecordingsService.appendFinalSegment (đã UNUSED).
+   * Transcript hiện ghi qua replaceTranscript trong finalize().
+   */
   createSegment(data: Partial<TranscriptSegment>): TranscriptSegment {
     const now = new Date();
     return {
@@ -200,6 +204,7 @@ export class RecordingsRepository {
     };
   }
 
+  /** @deprecated Chỉ dùng bởi appendFinalSegment (UNUSED). */
   async saveSegment(segment: TranscriptSegment): Promise<TranscriptSegment> {
     this.store.requireReady();
     const id = segment.id || this.store.newId();
@@ -221,6 +226,7 @@ export class RecordingsRepository {
     return this.fromSegmentDoc(doc);
   }
 
+  /** @deprecated Chỉ dùng bởi RecordingsService.updateSegmentTranslation (UNUSED). */
   async updateSegmentTranslation(
     segmentId: string,
     recordingId: string,

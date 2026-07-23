@@ -36,6 +36,11 @@ export class VercelBlobService implements OnModuleInit {
     return !!this.token;
   }
 
+  getToken(): string {
+    this.requireReady();
+    return this.token;
+  }
+
   getAccess(): 'public' | 'private' {
     return this.access;
   }

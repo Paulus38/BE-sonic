@@ -102,6 +102,28 @@ export class FinalizeRecordingDto {
   generateSummary?: boolean;
 }
 
+export class ConfirmClientAudioDto {
+  @ApiProperty({
+    description: 'Vercel Blob URL returned by client upload()',
+  })
+  @IsString()
+  @MaxLength(2048)
+  url!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  contentType?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(500 * 1024 * 1024)
+  size?: number;
+}
+
 export class RetranscribeRecordingDto {
   @ApiPropertyOptional({ enum: ['en', 'vi'], default: 'en' })
   @IsOptional()
