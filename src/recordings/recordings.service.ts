@@ -367,6 +367,9 @@ export class RecordingsService {
   ) {
     const recording = await this.requireOwned(userId, id);
     const url = (dto.url || '').trim();
+    if (!url) {
+      throw new BadRequestException('Cần url (Vercel Blob) sau client upload');
+    }
     if (!url.startsWith('https://') || !this.vercelBlob.isVercelBlobRef(url)) {
       throw new BadRequestException('URL audio không hợp lệ (cần Vercel Blob)');
     }

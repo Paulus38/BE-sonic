@@ -2,6 +2,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBoolean,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -103,12 +104,29 @@ export class FinalizeRecordingDto {
 }
 
 export class ConfirmClientAudioDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
+    description: 'Storage provider (optional; ignored for Blob-only flow)',
+    enum: ['r2', 'vercel-blob'],
+  })
+  @IsOptional()
+  @IsIn(['r2', 'vercel-blob'])
+  provider?: 'r2' | 'vercel-blob';
+
+  @ApiPropertyOptional({
     description: 'Vercel Blob URL returned by client upload()',
   })
+  @IsOptional()
   @IsString()
   @MaxLength(2048)
-  url!: string;
+  url?: string;
+
+  @ApiPropertyOptional({
+    description: 'R2 object key (when provider=r2)',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1024)
+  key?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
