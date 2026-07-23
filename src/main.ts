@@ -2,12 +2,14 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { Logger } from 'nestjs-pino';
 import helmet from 'helmet';
 import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  app.useLogger(app.get(Logger));
 
   const config = app.get(ConfigService);
   const port = config.get<number>('app.port') ?? 3001;
@@ -56,11 +58,10 @@ async function bootstrap() {
   }
 
   await app.listen(port, '0.0.0.0');
-  // eslint-disable-next-line no-console
-  console.log(`Sonic Scribe API listening on http://0.0.0.0:${port}`);
+  const logger = app.get(Logger);
+  logger.log(`Sonic Scribe API listening on http://0.0.0.0:${port}`);
   if (swaggerEnabled) {
-    // eslint-disable-next-line no-console
-    console.log(`Swagger docs: http://localhost:${port}/docs`);
+    logger.log(`Swagger docs: http://localhost:${port}/docs`);
   }
 }
 

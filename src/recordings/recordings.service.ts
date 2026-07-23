@@ -16,6 +16,7 @@ import { RecordingStatus } from '../common/enums';
 import { AiService } from '../ai/ai.service';
 import { StorageService } from '../storage/storage.service';
 import { SpeechService } from '../speech/speech.service';
+import { AuditService } from '../audit/audit.service';
 import { User } from '../users/user.entity';
 import { MulterFile } from '../common/types/uploaded-file';
 
@@ -28,6 +29,7 @@ export class RecordingsService {
     private readonly aiService: AiService,
     private readonly storageService: StorageService,
     private readonly speechService: SpeechService,
+    private readonly audit: AuditService,
   ) {}
 
   async create(user: User, dto: CreateRecordingDto) {
@@ -45,7 +47,16 @@ export class RecordingsService {
       ],
       tags: ['Live', dto.category ?? 'Học Tiếng Anh'],
     });
-    return this.toDto(await this.recordingsRepository.save(recording));
+    const saved = await this.recordingsRepository.save(recording);
+    void this.audit.record({
+      userId: user.id,
+      userEmail: user.email,
+      action: 'recording.create',
+      resource: 'recording',
+      resourceId: saved.id,
+      meta: { category: saved.category },
+    });
+    return this.toDto(saved);
   }
 
   async getOne(userId: string, id: string) {
@@ -129,6 +140,17 @@ export class RecordingsService {
       recording.tags = ['Live', recording.category];
     }
     const saved = await this.recordingsRepository.save(recording);
+    void this.audit.record({
+      userId,
+      action: 'recording.finalize',
+      resource: 'recording',
+      resourceId: saved.id,
+      meta: {
+        durationSec: saved.durationSec,
+        lines: dto.transcript?.length ?? 0,
+        generateSummary: dto.generateSummary === true,
+      },
+    });
     const full = await this.recordingsRepository.findByIdForUser(
       saved.id,
       userId,
@@ -188,6 +210,17 @@ export class RecordingsService {
     recording.audioMime = stored.mimeType;
     recording.audioBytes = stored.size;
     await this.recordingsRepository.save(recording);
+    void this.audit.record({
+      userId,
+      action: 'recording.audio_upload',
+      resource: 'audio',
+      resourceId: id,
+      meta: {
+        bytes: stored.size,
+        mime: stored.mimeType,
+        provider: stored.provider,
+      },
+    });
     return {
       audioUrl: `/api/v1/recordings/${id}/audio`,
       storageKey: stored.key,
@@ -277,6 +310,12 @@ export class RecordingsService {
       await this.storageService.deleteIfExists(recording.audioPath);
     }
     await this.recordingsRepository.hardDelete(id, userId);
+    void this.audit.record({
+      userId,
+      action: 'recording.delete',
+      resource: 'recording',
+      resourceId: id,
+    });
   }
 
   async regenerateSummary(userId: string, id: string) {
@@ -294,6 +333,12 @@ export class RecordingsService {
       userId,
     );
     await this.recordingsRepository.save(recording);
+    void this.audit.record({
+      userId,
+      action: 'recording.summarize',
+      resource: 'ai',
+      resourceId: id,
+    });
     const latest = await this.recordingsRepository.findByIdForUser(id, userId);
     return this.toDto(latest ?? recording, true);
   }
@@ -374,6 +419,13 @@ export class RecordingsService {
       tags.add(provider);
       recording.tags = Array.from(tags);
       await this.recordingsRepository.save(recording);
+      void this.audit.record({
+        userId,
+        action: 'recording.retranscribe',
+        resource: 'ai',
+        resourceId: id,
+        meta: { language, provider, lines: segments.length },
+      });
 
       const latest = await this.recordingsRepository.findByIdForUser(
         id,
@@ -386,6 +438,14 @@ export class RecordingsService {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Retranscribe failed for ${id}: ${msg}`);
+      void this.audit.record({
+        userId,
+        action: 'recording.retranscribe',
+        resource: 'ai',
+        resourceId: id,
+        status: 'error',
+        message: msg.slice(0, 400),
+      });
       if (err instanceof BadRequestException) throw err;
       throw new BadGatewayException(
         `Transcript lại thất bại: ${msg.slice(0, 400)}`,

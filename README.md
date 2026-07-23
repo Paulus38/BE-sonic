@@ -61,3 +61,18 @@ See **[AI_SETUP.md](./AI_SETUP.md)** for which product features need AI vs free 
 | `deepgram` | `DEEPGRAM_API_KEY` |
 
 Also: [FIREBASE_SETUP.md](./FIREBASE_SETUP.md), [VERCEL_BLOB_SETUP.md](./VERCEL_BLOB_SETUP.md).
+
+## Logging
+
+| Mode | Where | How |
+|------|--------|-----|
+| App / HTTP | Vercel Runtime Logs / local stdout | `LOG_LEVEL`, `LOG_HTTP` (nestjs-pino JSON) |
+| Audit trail | Firestore `audit_logs` + FE **Nhật ký** (admin) | Login, recording save/delete, AI summarize/retranscribe, admin user ops |
+
+```bash
+# Local verbose
+LOG_LEVEL=debug
+LOG_HTTP=true
+```
+
+Production: set `LOG_LEVEL=info` on Vercel. View audit in the app sidebar → **Nhật ký** (admin only), or `GET /api/v1/admin/logs`.

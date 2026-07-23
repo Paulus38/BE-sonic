@@ -10,12 +10,14 @@ import { UsersRepository } from './users.repository';
 import { User } from './user.entity';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 import { UserRole } from '../common/enums';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     private readonly usersRepository: UsersRepository,
     private readonly config: ConfigService,
+    private readonly audit: AuditService,
   ) {}
 
   private isAdminEmail(email: string): boolean {
@@ -124,6 +126,13 @@ export class UsersService {
     const user = await this.findByIdOrFail(targetUserId);
     user.role = role;
     const saved = await this.usersRepository.save(user);
+    void this.audit.record({
+      userId: actorId,
+      action: 'admin.user_set_role',
+      resource: 'admin',
+      resourceId: targetUserId,
+      meta: { role },
+    });
     return this.toPublic(saved);
   }
 
@@ -143,6 +152,13 @@ export class UsersService {
       input.password,
       role,
     );
+    void this.audit.record({
+      action: 'admin.user_create',
+      resource: 'admin',
+      resourceId: user.id,
+      userEmail: user.email,
+      meta: { role: user.role },
+    });
     return this.toPublic(user);
   }
 
@@ -194,6 +210,17 @@ export class UsersService {
     }
 
     const saved = await this.usersRepository.save(user);
+    void this.audit.record({
+      userId: actorId,
+      action: 'admin.user_update',
+      resource: 'admin',
+      resourceId: targetUserId,
+      meta: {
+        fields: Object.keys(input).filter(
+          (k) => input[k as keyof typeof input] !== undefined,
+        ),
+      },
+    });
     return this.toPublic(saved);
   }
 
@@ -203,6 +230,12 @@ export class UsersService {
     }
     await this.findByIdOrFail(targetUserId);
     await this.usersRepository.hardDelete(targetUserId);
+    void this.audit.record({
+      userId: actorId,
+      action: 'admin.user_delete',
+      resource: 'admin',
+      resourceId: targetUserId,
+    });
     return { deleted: true, id: targetUserId };
   }
 }

@@ -5,6 +5,7 @@ import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { AuditService } from '../audit/audit.service';
 
 export interface JwtPayload {
   sub: string;
@@ -26,6 +27,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
+    private readonly audit: AuditService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -34,6 +36,14 @@ export class AuthService {
       dto.email,
       dto.password,
     );
+    void this.audit.record({
+      userId: user.id,
+      userEmail: user.email,
+      action: 'auth.register',
+      resource: 'auth',
+      resourceId: user.id,
+      status: 'ok',
+    });
     return this.buildAuthResponse(user.id, user.email, user);
   }
 
@@ -42,8 +52,24 @@ export class AuthService {
     const hash = user?.passwordHash || LOGIN_TIMING_DUMMY_HASH;
     const valid = await bcrypt.compare(dto.password, hash);
     if (!user || !valid) {
+      void this.audit.record({
+        userId: user?.id ?? null,
+        userEmail: dto.email.toLowerCase().trim(),
+        action: 'auth.login',
+        resource: 'auth',
+        status: 'error',
+        message: 'Invalid email or password',
+      });
       throw new UnauthorizedException('Invalid email or password');
     }
+    void this.audit.record({
+      userId: user.id,
+      userEmail: user.email,
+      action: 'auth.login',
+      resource: 'auth',
+      resourceId: user.id,
+      status: 'ok',
+    });
     return this.buildAuthResponse(user.id, user.email, user);
   }
 

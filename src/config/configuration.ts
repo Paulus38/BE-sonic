@@ -76,4 +76,13 @@ export default registerAs('app', () => ({
     process.env.SWAGGER_ENABLED === 'true' ||
     (process.env.SWAGGER_ENABLED !== 'false' &&
       (process.env.NODE_ENV ?? 'development') !== 'production'),
+  /** error | warn | info | debug — default info in production, debug locally */
+  logLevel: (
+    process.env.LOG_LEVEL ??
+    ((process.env.NODE_ENV ?? 'development') === 'production'
+      ? 'info'
+      : 'debug')
+  ).toLowerCase(),
+  /** Log each HTTP request (method/path/status/duration). Default true. */
+  logHttp: process.env.LOG_HTTP !== 'false',
 }));

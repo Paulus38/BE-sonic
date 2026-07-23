@@ -14,6 +14,8 @@ import type {
  * - recordings/{recordingId}
  * - recordings/{recordingId}/segments/{segmentId}
  * - dictionary/{itemId}
+ * - ai_usage/{userId}/events/{eventId}
+ * - audit_logs/{id}
  */
 @Injectable()
 export class FirestoreStore {
@@ -58,6 +60,11 @@ export class FirestoreStore {
 
   aiUsageEvents(userId: string): CollectionReference {
     return this.aiUsage().doc(userId).collection('events');
+  }
+
+  /** System / user action audit trail */
+  auditLogs(): CollectionReference {
+    return this.db().collection('audit_logs');
   }
 
   newId() {
