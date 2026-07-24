@@ -35,12 +35,28 @@ function makeService(
 describe('SpeechService.transcribeFile', () => {
   const buffer = Buffer.from('fake-audio');
 
-  it('uses Deepgram when ready', async () => {
+  it('uses Deepgram when ready and keeps speaker segments', async () => {
     const service = makeService(
       SpeechProviderType.AUTO,
       {
         isReady: () => true,
-        transcribeBuffer: jest.fn().mockResolvedValue('hello deepgram'),
+        transcribeBuffer: jest.fn().mockResolvedValue({
+          text: 'hello deepgram',
+          segments: [
+            {
+              text: 'hello',
+              speaker: 'Speaker 1',
+              tStartMs: 0,
+              tEndMs: 500,
+            },
+            {
+              text: 'deepgram',
+              speaker: 'Speaker 2',
+              tStartMs: 500,
+              tEndMs: 1200,
+            },
+          ],
+        }),
       },
       { isReady: () => true },
     );
@@ -51,7 +67,10 @@ describe('SpeechService.transcribeFile', () => {
       language: 'en',
     });
 
-    expect(result).toEqual({ text: 'hello deepgram', provider: 'deepgram' });
+    expect(result.provider).toBe('deepgram');
+    expect(result.text).toBe('hello deepgram');
+    expect(result.segments).toHaveLength(2);
+    expect(result.segments[1].speaker).toBe('Speaker 2');
   });
 
   it('falls back to Gemini when Deepgram fails', async () => {
@@ -76,7 +95,16 @@ describe('SpeechService.transcribeFile', () => {
       userId: 'u1',
     });
 
-    expect(result).toEqual({ text: 'hello gemini', provider: 'gemini' });
+    expect(result.provider).toBe('gemini');
+    expect(result.text).toBe('hello gemini');
+    expect(result.segments).toEqual([
+      {
+        text: 'hello gemini',
+        speaker: 'Speaker 1',
+        tStartMs: 0,
+        tEndMs: 0,
+      },
+    ]);
   });
 
   it('throws combined error when both providers fail', async () => {

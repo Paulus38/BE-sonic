@@ -104,7 +104,7 @@ export class RecordingsService {
         recording.id,
         dto.transcript.map((line, idx) => ({
           time: line.time || this.formatDuration(idx),
-          speaker: line.speaker || 'Speaker',
+          speaker: line.speaker || 'Speaker 1',
           text: line.text,
           translation: line.translation ?? null,
           tStartMs: line.tStartMs ?? idx * 1000,
@@ -567,15 +567,19 @@ export class RecordingsService {
     try {
       const audio = await this.getAudioStream(userId, id);
       const language = dto.language === 'vi' ? 'vi' : 'en';
-      const { text, provider } = await this.speechService.transcribeFile({
-        buffer: audio.buffer,
-        mimeType: audio.mime || 'audio/webm',
-        language,
-        category: recording.category,
-        userId,
-      });
+      const { text, provider, segments: sttSegments } =
+        await this.speechService.transcribeFile({
+          buffer: audio.buffer,
+          mimeType: audio.mime || 'audio/webm',
+          language,
+          category: recording.category,
+          userId,
+        });
 
-      const lines = this.splitTranscriptLines(text, recording.durationSec);
+      const lines =
+        sttSegments.length > 0
+          ? this.normalizeSttSegments(sttSegments, recording.durationSec)
+          : this.splitTranscriptLines(text, recording.durationSec);
       const wantTranslate =
         dto.translate !== false && language === 'en';
 
@@ -658,6 +662,52 @@ export class RecordingsService {
     }
   }
 
+  private normalizeSttSegments(
+    segments: Array<{
+      text: string;
+      speaker: string;
+      tStartMs: number;
+      tEndMs: number;
+    }>,
+    durationSec: number,
+  ): Array<{
+    time: string;
+    speaker: string;
+    text: string;
+    tStartMs: number;
+    tEndMs: number;
+  }> {
+    const totalMs = Math.max(1000, (durationSec || 0) * 1000);
+    const hasTiming = segments.some((s) => s.tEndMs > s.tStartMs);
+    if (!hasTiming) {
+      const step = Math.floor(totalMs / Math.max(1, segments.length));
+      return segments.map((s, idx) => {
+        const tStartMs = idx * step;
+        const tEndMs =
+          idx === segments.length - 1 ? totalMs : (idx + 1) * step;
+        return {
+          time: this.formatDuration(Math.floor(tStartMs / 1000)),
+          speaker: s.speaker || 'Speaker 1',
+          text: s.text,
+          tStartMs,
+          tEndMs,
+        };
+      });
+    }
+
+    return segments.map((s) => {
+      const tStartMs = Math.max(0, s.tStartMs);
+      const tEndMs = Math.max(tStartMs, s.tEndMs || tStartMs);
+      return {
+        time: this.formatDuration(Math.floor(tStartMs / 1000)),
+        speaker: s.speaker || 'Speaker 1',
+        text: s.text,
+        tStartMs,
+        tEndMs,
+      };
+    });
+  }
+
   private splitTranscriptLines(
     text: string,
     durationSec: number,
@@ -673,7 +723,7 @@ export class RecordingsService {
       return [
         {
           time: '00:00',
-          speaker: 'Speaker',
+          speaker: 'Speaker 1',
           text: '(Không nhận diện được lời nói trong audio)',
           tStartMs: 0,
           tEndMs: Math.max(0, durationSec) * 1000,
@@ -700,7 +750,7 @@ export class RecordingsService {
       const tEndMs = idx === chunks.length - 1 ? totalMs : (idx + 1) * step;
       return {
         time: this.formatDuration(Math.floor(tStartMs / 1000)),
-        speaker: 'Speaker',
+        speaker: 'Speaker 1',
         text: chunk,
         tStartMs,
         tEndMs,

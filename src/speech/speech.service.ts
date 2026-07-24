@@ -3,8 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { GeminiSpeechProvider } from './providers/gemini-speech.provider';
 import { DeepgramSpeechProvider } from './providers/deepgram-speech.provider';
 import {
+  FileTranscriptResult,
   SpeechProvider,
   SpeechSession,
+  TranscriptSegmentLine,
 } from './providers/speech-provider.interface';
 import { SpeechProviderType } from '../common/enums';
 
@@ -96,7 +98,7 @@ export class SpeechService implements OnModuleInit {
 
   /**
    * Offline / file STT for re-transcribe from stored audio.
-   * Prefer Deepgram prerecorded; fallback to Gemini.
+   * Prefer Deepgram prerecorded (with diarization); fallback to Gemini.
    */
   async transcribeFile(options: {
     buffer: Buffer;
@@ -104,19 +106,19 @@ export class SpeechService implements OnModuleInit {
     language?: string;
     category?: string;
     userId?: string;
-  }): Promise<{ text: string; provider: string }> {
+  }): Promise<FileTranscriptResult & { provider: string }> {
     const language = options.language === 'vi' ? 'vi' : 'en';
     const mime = options.mimeType || 'audio/webm';
     let deepgramError: string | null = null;
 
     if (this.deepgram.isReady()) {
       try {
-        const text = await this.deepgram.transcribeBuffer(
+        const result = await this.deepgram.transcribeBuffer(
           options.buffer,
           mime,
           language,
         );
-        return { text, provider: 'deepgram' };
+        return { ...result, provider: 'deepgram' };
       } catch (err) {
         deepgramError = (err as Error).message;
         this.logger.warn(`Deepgram file STT failed: ${deepgramError}`);
@@ -140,7 +142,11 @@ export class SpeechService implements OnModuleInit {
           options.userId,
           language,
         );
-        return { text, provider: 'gemini' };
+        return {
+          text,
+          segments: singleSpeakerSegments(text),
+          provider: 'gemini',
+        };
       } catch (err) {
         const geminiError = (err as Error).message;
         throw new Error(
@@ -270,4 +276,17 @@ export class SpeechService implements OnModuleInit {
 
     return this.probing;
   }
+}
+
+function singleSpeakerSegments(text: string): TranscriptSegmentLine[] {
+  const cleaned = text.replace(/\s+/g, ' ').trim();
+  if (!cleaned) return [];
+  return [
+    {
+      text: cleaned,
+      speaker: 'Speaker 1',
+      tStartMs: 0,
+      tEndMs: 0,
+    },
+  ];
 }
