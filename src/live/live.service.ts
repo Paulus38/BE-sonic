@@ -93,18 +93,20 @@ export class LiveService {
     if (speech) {
       await speech.start(async (result) => {
         if (state.paused || !result.text.trim()) return;
+        const speaker = (result.speaker || 'Speaker 1').slice(0, 80);
         if (!result.isFinal) {
           const now = Date.now() - state.startedAt;
           onTranscript({
             type: 'partial',
             text: result.text,
+            speaker,
             seq: state.seq,
             tStartMs: Math.max(0, now - 1500),
             tEndMs: now,
           });
           return;
         }
-        await this.commitFinal(state, user, result.text, 'Speaker');
+        await this.commitFinal(state, user, result.text, speaker);
       });
     }
 
@@ -150,7 +152,7 @@ export class LiveService {
       state,
       user,
       cleaned,
-      (speaker || 'Speaker').slice(0, 80),
+      (speaker || 'Speaker 1').slice(0, 80),
       clientSeq,
     );
   }
