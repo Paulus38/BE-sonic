@@ -10,6 +10,32 @@ type UsageMeta = {
   totalTokenCount?: number;
 };
 
+/** Accepts a JSON array, fenced JSON, or bullet/numbered lines. */
+function parseSuggestions(raw: string): string[] {
+  const cleaned = raw
+    .replace(/^```(?:json)?/i, '')
+    .replace(/```$/, '')
+    .trim();
+  try {
+    const parsed = JSON.parse(cleaned) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed
+        .filter((s): s is string => typeof s === 'string')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 3);
+    }
+  } catch {
+    // fall through to line-based parsing
+  }
+  return cleaned
+    .split('\n')
+    .map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
+    .map((line) => line.replace(/^["']|["']$/g, '').trim())
+    .filter((line) => line.length > 3)
+    .slice(0, 3);
+}
+
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
@@ -249,9 +275,9 @@ Chủ đề: ${category}
     const models = Array.from(
       new Set([
         this.model,
-        'gemini-2.0-flash',
-        'gemini-1.5-flash',
-        'gemini-2.5-flash',
+        'gemini-flash-latest',
+        'gemini-3-flash-preview',
+        'gemini-2.5-flash-lite',
       ]),
     );
     for (const model of models) {
@@ -282,6 +308,97 @@ EN: ${text.slice(0, 1200)}`;
       }
     }
     return null;
+  }
+
+  /**
+   * Suggest English replies for the latest question in a live conversation,
+   * personalized with the user's profile (job, hobbies, habits, about me).
+   */
+  async suggestReply(input: {
+    context: string;
+    profile: {
+      name?: string | null;
+      job?: string | null;
+      hobbies?: string | null;
+      habits?: string | null;
+      aboutMe?: string | null;
+    };
+    category?: string;
+    userId?: string;
+  }): Promise<string[]> {
+    if (!this.client) {
+      throw new Error('Gemini API key is not configured');
+    }
+    const context = input.context.trim().slice(-6000);
+    if (!context) return [];
+
+    const profileLines = [
+      input.profile.name ? `- Name: ${input.profile.name}` : null,
+      input.profile.job ? `- Job/work: ${input.profile.job}` : null,
+      input.profile.hobbies ? `- Hobbies: ${input.profile.hobbies}` : null,
+      input.profile.habits ? `- Habits: ${input.profile.habits}` : null,
+      input.profile.aboutMe ? `- About: ${input.profile.aboutMe}` : null,
+    ].filter(Boolean);
+    const profileBlock = profileLines.length
+      ? profileLines.join('\n')
+      : '(no personal info provided — give natural generic answers)';
+
+    const prompt = `You are a real-time English conversation assistant. The user is in a live conversation (context: ${input.category || 'general'}) and needs help answering.
+
+USER'S PERSONAL PROFILE (always prioritize these facts when relevant — the answer must sound like this specific person):
+${profileBlock}
+
+RECENT CONVERSATION TRANSCRIPT (most recent last):
+"""
+${context}
+"""
+
+Task:
+1. Find the most recent question or prompt directed at the user.
+2. Write 3 natural spoken-English replies the user could say, grounded in the profile facts above whenever they are relevant. Keep each reply 1-3 sentences, conversational, first person.
+3. If no clear question exists, suggest 3 natural things the user could say next to keep the conversation going.
+
+Return ONLY a JSON array of 3 strings, no markdown, no explanation. Example: ["reply one","reply two","reply three"]`;
+
+    const models = Array.from(
+      new Set([
+        this.model,
+        'gemini-flash-latest',
+        'gemini-3-flash-preview',
+        'gemini-2.5-flash-lite',
+      ]),
+    );
+    let lastError = 'Suggest reply failed';
+    for (const model of models) {
+      try {
+        const response = await this.client.models.generateContent({
+          model,
+          contents: prompt,
+          config: {
+            // Suggestions must be fast: disable internal "thinking" and cap output
+            thinkingConfig: { thinkingBudget: 0 },
+            maxOutputTokens: 300,
+            temperature: 0.8,
+          },
+        });
+        const raw = (response.text ?? '').trim();
+        if (!raw) continue;
+        const usage = this.extractUsage(response);
+        if (!usage.totalTokens) {
+          usage.promptTokens = this.estimateTokens(prompt);
+          usage.completionTokens = this.estimateTokens(raw);
+          usage.totalTokens = usage.promptTokens + usage.completionTokens;
+        }
+        await this.track(input.userId, 'suggest', model, usage);
+        const suggestions = parseSuggestions(raw);
+        if (suggestions.length) return suggestions;
+        lastError = `Gemini ${model} returned unparsable suggestions`;
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`Suggest reply failed (${model}): ${lastError}`);
+      }
+    }
+    throw new Error(lastError);
   }
 
   async transcribeAudio(

@@ -1,4 +1,12 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+  ServiceUnavailableException,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -7,8 +15,10 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UserRole } from '../common/enums';
 import { User } from '../users/user.entity';
+import { AiService } from './ai.service';
 import { AiUsageService } from './ai-usage.service';
 import { UsersService } from '../users/users.service';
+import { SuggestReplyDto } from './dto/suggest-reply.dto';
 
 @ApiTags('ai')
 @ApiBearerAuth()
@@ -16,10 +26,43 @@ import { UsersService } from '../users/users.service';
 @Controller('api/v1/ai')
 export class AiController {
   constructor(
+    private readonly ai: AiService,
     private readonly usage: AiUsageService,
     private readonly users: UsersService,
     private readonly config: ConfigService,
   ) {}
+
+  /** Personalized English reply suggestions for a live conversation. */
+  @Post('suggest-reply')
+  async suggestReply(
+    @CurrentUser() user: User,
+    @Body() dto: SuggestReplyDto,
+  ) {
+    if (!this.ai.isAvailable()) {
+      throw new ServiceUnavailableException(
+        'AI chưa được cấu hình (thiếu GEMINI_API_KEY)',
+      );
+    }
+    try {
+      const suggestions = await this.ai.suggestReply({
+        context: dto.context,
+        category: dto.category,
+        userId: user.id,
+        profile: {
+          name: user.name,
+          job: user.job,
+          hobbies: user.hobbies,
+          habits: user.habits,
+          aboutMe: user.aboutMe,
+        },
+      });
+      return { suggestions };
+    } catch (err) {
+      throw new ServiceUnavailableException(
+        `Không tạo được gợi ý: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
 
   private quotaTokens(): number {
     return this.config.get<number>('app.aiTokenQuota') ?? 1_500_000;

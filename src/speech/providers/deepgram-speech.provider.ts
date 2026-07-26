@@ -22,6 +22,8 @@ class DeepgramSpeechSession implements SpeechSession {
   private readonly logger = new Logger(DeepgramSpeechSession.name);
   private socket: WebSocket | null = null;
   private onResult: ((result: TranscriptResult) => void) | null = null;
+  /** Finalized speaker-runs awaiting an endpoint (speech_final / UtteranceEnd) */
+  private pendingRuns: Array<{ speaker: number; text: string }> = [];
 
   constructor(
     private readonly apiKey: string,
@@ -31,13 +33,15 @@ class DeepgramSpeechSession implements SpeechSession {
   async start(onResult: (result: TranscriptResult) => void): Promise<void> {
     this.onResult = onResult;
     const lang = this.language === 'vi' ? 'vi' : 'en';
-    // endpointing helps Vietnamese utterance boundaries (more silence gaps)
-    const endpointing = lang === 'vi' ? 400 : 300;
+    // Fast turn-taking: shorter endpointing cuts lines sooner;
+    // utterance_end_ms catches gaps too short for endpointing to fire.
+    const endpointing = lang === 'vi' ? 350 : 250;
     const url =
       `wss://api.deepgram.com/v1/listen?model=nova-2&smart_format=true` +
       `&punctuate=true&interim_results=true&diarize=true` +
       `&language=${encodeURIComponent(lang)}` +
       `&endpointing=${endpointing}` +
+      `&utterance_end_ms=1000&vad_events=true` +
       `&encoding=linear16&sample_rate=16000`;
 
     await new Promise<void>((resolve, reject) => {
@@ -57,6 +61,7 @@ class DeepgramSpeechSession implements SpeechSession {
   }
 
   async stop(): Promise<void> {
+    this.flushPendingRuns();
     if (this.socket?.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify({ type: 'CloseStream' }));
       this.socket.close();
@@ -64,11 +69,42 @@ class DeepgramSpeechSession implements SpeechSession {
     this.socket = null;
   }
 
+  /** Emit buffered runs as final lines, merging consecutive same-speaker runs. */
+  private flushPendingRuns(): void {
+    if (!this.pendingRuns.length || !this.onResult) {
+      this.pendingRuns = [];
+      return;
+    }
+    const merged: Array<{ speaker: number; text: string }> = [];
+    for (const run of this.pendingRuns) {
+      const last = merged[merged.length - 1];
+      if (last && last.speaker === run.speaker) {
+        last.text = `${last.text} ${run.text}`.replace(/\s+/g, ' ').trim();
+      } else {
+        merged.push({ ...run });
+      }
+    }
+    this.pendingRuns = [];
+    for (const run of merged) {
+      if (!run.text) continue;
+      this.onResult({
+        text: run.text,
+        isFinal: true,
+        speaker: formatSpeakerLabel(run.speaker),
+      });
+    }
+  }
+
+  private pendingTextLength(): number {
+    return this.pendingRuns.reduce((sum, r) => sum + r.text.length + 1, 0);
+  }
+
   private handleMessage(raw: WebSocket.RawData): void {
     try {
       const data = JSON.parse(raw.toString()) as {
         type?: string;
         is_final?: boolean;
+        speech_final?: boolean;
         channel?: {
           alternatives?: Array<{
             transcript?: string;
@@ -76,28 +112,47 @@ class DeepgramSpeechSession implements SpeechSession {
           }>;
         };
       };
+
+      // Gap of utterance_end_ms after the last word — someone stopped talking.
+      if (data.type === 'UtteranceEnd') {
+        this.flushPendingRuns();
+        return;
+      }
+      if (data.type !== 'Results') return;
+
       const alt = data.channel?.alternatives?.[0];
       const text = alt?.transcript?.trim();
       if (!text || !this.onResult) return;
 
       const words = alt?.words ?? [];
-      if (data.is_final && words.length > 0) {
-        const runs = splitWordRunsBySpeaker(words);
-        for (const run of runs) {
-          if (!run.text) continue;
-          this.onResult({
-            text: run.text,
-            isFinal: true,
-            speaker: formatSpeakerLabel(run.speaker),
-          });
+
+      if (data.is_final) {
+        const runs =
+          words.length > 0
+            ? splitWordRunsBySpeaker(words)
+            : [
+                {
+                  speaker:
+                    this.pendingRuns[this.pendingRuns.length - 1]?.speaker ??
+                    0,
+                  text,
+                },
+              ];
+        this.pendingRuns.push(...runs);
+        // Endpoint reached (speech_final) → close the line now.
+        // Safety valve: flush overly long buffers so lines never grow unbounded
+        // when people talk back-to-back without a detectable gap.
+        if (data.speech_final || this.pendingTextLength() > 280) {
+          this.flushPendingRuns();
         }
         return;
       }
 
+      // Interim: live-preview only; speaker = dominant voice in this window
       const speakerIdx = dominantSpeaker(words);
       this.onResult({
         text,
-        isFinal: !!data.is_final,
+        isFinal: false,
         speaker:
           speakerIdx != null ? formatSpeakerLabel(speakerIdx) : undefined,
       });
