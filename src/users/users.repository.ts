@@ -14,6 +14,10 @@ type UserDoc = {
   sampleRate: number;
   aiNoiseCancellation: boolean;
   theme: 'light' | 'dark';
+  job?: string | null;
+  hobbies?: string | null;
+  habits?: string | null;
+  aboutMe?: string | null;
   role: UserRole;
   createdAt: string;
   updatedAt: string;
@@ -37,6 +41,10 @@ export class UsersRepository {
       sampleRate: data.sampleRate ?? 48,
       aiNoiseCancellation: data.aiNoiseCancellation ?? true,
       theme: data.theme ?? 'light',
+      job: data.job ?? null,
+      hobbies: data.hobbies ?? null,
+      habits: data.habits ?? null,
+      aboutMe: data.aboutMe ?? null,
       role: (data.role as UserRole) ?? UserRole.USER,
       recordings: [],
       dictionaryItems: [],
@@ -63,6 +71,10 @@ export class UsersRepository {
         sampleRate: user.sampleRate ?? 48,
         aiNoiseCancellation: user.aiNoiseCancellation ?? true,
         theme: user.theme ?? 'light',
+        job: user.job ?? null,
+        hobbies: user.hobbies ?? null,
+        habits: user.habits ?? null,
+        aboutMe: user.aboutMe ?? null,
         role: (user.role as UserRole) || UserRole.USER,
         createdAt: createdAt.toISOString(),
         updatedAt: now.toISOString(),
@@ -140,6 +152,10 @@ export class UsersRepository {
       sampleRate: doc.sampleRate ?? 48,
       aiNoiseCancellation: doc.aiNoiseCancellation ?? true,
       theme: doc.theme ?? 'light',
+      job: doc.job ?? null,
+      hobbies: doc.hobbies ?? null,
+      habits: doc.habits ?? null,
+      aboutMe: doc.aboutMe ?? null,
       role: doc.role === UserRole.ADMIN ? UserRole.ADMIN : UserRole.USER,
       recordings: [],
       dictionaryItems: [],

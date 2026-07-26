@@ -43,4 +43,28 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsIn(['light', 'dark'])
   theme?: 'light' | 'dark';
+
+  @ApiPropertyOptional({ description: 'Công việc hiện tại' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  job?: string;
+
+  @ApiPropertyOptional({ description: 'Sở thích' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  hobbies?: string;
+
+  @ApiPropertyOptional({ description: 'Thói quen' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  habits?: string;
+
+  @ApiPropertyOptional({ description: 'Giới thiệu thêm về bản thân' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  aboutMe?: string;
 }

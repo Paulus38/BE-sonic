@@ -44,6 +44,19 @@ export class User {
   @Column({ type: 'varchar', length: 16, default: 'light' })
   theme!: 'light' | 'dark';
 
+  /** Personal context used to personalize AI reply suggestions */
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  job!: string | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  hobbies!: string | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  habits!: string | null;
+
+  @Column({ name: 'about_me', type: 'varchar', length: 1000, nullable: true })
+  aboutMe!: string | null;
+
   /** RBAC: user | admin */
   @Column({ type: 'varchar', length: 16, default: 'user' })
   role!: 'user' | 'admin';

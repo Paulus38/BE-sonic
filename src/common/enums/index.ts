@@ -24,4 +24,4 @@ export enum UserRole {
   ADMIN = 'admin',
 }
 
-export type AiFeature = 'summarize' | 'translate' | 'transcribe';
+export type AiFeature = 'summarize' | 'translate' | 'transcribe' | 'suggest';

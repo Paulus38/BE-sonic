@@ -92,6 +92,10 @@ export class UsersService {
       sampleRate: user.sampleRate,
       aiNoiseCancellation: user.aiNoiseCancellation,
       theme: user.theme,
+      job: user.job ?? null,
+      hobbies: user.hobbies ?? null,
+      habits: user.habits ?? null,
+      aboutMe: user.aboutMe ?? null,
       role: (user.role as UserRole) || UserRole.USER,
     };
   }
@@ -107,6 +111,10 @@ export class UsersService {
       user.aiNoiseCancellation = dto.aiNoiseCancellation;
     }
     if (dto.theme !== undefined) user.theme = dto.theme;
+    if (dto.job !== undefined) user.job = dto.job.trim() || null;
+    if (dto.hobbies !== undefined) user.hobbies = dto.hobbies.trim() || null;
+    if (dto.habits !== undefined) user.habits = dto.habits.trim() || null;
+    if (dto.aboutMe !== undefined) user.aboutMe = dto.aboutMe.trim() || null;
     const saved = await this.usersRepository.save(user);
     return this.toPublic(saved);
   }
