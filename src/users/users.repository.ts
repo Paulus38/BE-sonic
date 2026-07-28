@@ -19,6 +19,7 @@ type UserDoc = {
   habits?: string | null;
   aboutMe?: string | null;
   role: UserRole;
+  fcmToken?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -46,6 +47,7 @@ export class UsersRepository {
       habits: data.habits ?? null,
       aboutMe: data.aboutMe ?? null,
       role: (data.role as UserRole) ?? UserRole.USER,
+      fcmToken: data.fcmToken ?? null,
       recordings: [],
       dictionaryItems: [],
       createdAt: data.createdAt ?? now,
@@ -76,6 +78,7 @@ export class UsersRepository {
         habits: user.habits ?? null,
         aboutMe: user.aboutMe ?? null,
         role: (user.role as UserRole) || UserRole.USER,
+        fcmToken: user.fcmToken ?? null,
         createdAt: createdAt.toISOString(),
         updatedAt: now.toISOString(),
         deletedAt: user.deletedAt ? user.deletedAt.toISOString() : null,
@@ -157,6 +160,7 @@ export class UsersRepository {
       habits: doc.habits ?? null,
       aboutMe: doc.aboutMe ?? null,
       role: doc.role === UserRole.ADMIN ? UserRole.ADMIN : UserRole.USER,
+      fcmToken: doc.fcmToken ?? null,
       recordings: [],
       dictionaryItems: [],
       createdAt: new Date(doc.createdAt),

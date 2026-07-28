@@ -79,6 +79,26 @@ export class FirebaseService implements OnModuleInit {
     return this.app.firestore();
   }
 
+  /** Best-effort push — never throws, just logs. Caller should not await-block on it. */
+  async sendPush(
+    token: string | null | undefined,
+    payload: { title: string; body: string; data?: Record<string, string> },
+  ): Promise<void> {
+    if (!this.app || !token) return;
+    try {
+      await this.app.messaging().send({
+        token,
+        notification: { title: payload.title, body: payload.body },
+        data: payload.data,
+        android: { priority: 'high' },
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Push send failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   private resolveCredential(): admin.credential.Credential {
     const jsonInline = this.config.get<string>(
       'app.firebase.serviceAccountJson',

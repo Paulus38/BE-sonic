@@ -119,6 +119,13 @@ export class UsersService {
     return this.toPublic(saved);
   }
 
+  async setPushToken(userId: string, token: string) {
+    const user = await this.findByIdOrFail(userId);
+    user.fcmToken = token;
+    await this.usersRepository.save(user);
+    return { ok: true };
+  }
+
   async listUsers() {
     const users = await this.usersRepository.listAll();
     return users.map((u) => this.toPublic(u));

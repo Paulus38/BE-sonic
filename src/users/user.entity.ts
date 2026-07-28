@@ -61,6 +61,10 @@ export class User {
   @Column({ type: 'varchar', length: 16, default: 'user' })
   role!: 'user' | 'admin';
 
+  /** FCM device token — push notifications (mobile app). */
+  @Column({ name: 'fcm_token', type: 'varchar', length: 500, nullable: true })
+  fcmToken!: string | null;
+
   @OneToMany(() => Recording, (recording) => recording.user)
   recordings!: Recording[];
 

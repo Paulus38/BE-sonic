@@ -23,7 +23,7 @@ function parseSuggestions(raw: string): string[] {
         .filter((s): s is string => typeof s === 'string')
         .map((s) => s.trim())
         .filter(Boolean)
-        .slice(0, 3);
+        .slice(0, 1);
     }
   } catch {
     // fall through to line-based parsing
@@ -33,7 +33,7 @@ function parseSuggestions(raw: string): string[] {
     .map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
     .map((line) => line.replace(/^["']|["']$/g, '').trim())
     .filter((line) => line.length > 3)
-    .slice(0, 3);
+    .slice(0, 1);
 }
 
 @Injectable()
@@ -355,10 +355,10 @@ ${context}
 
 Task:
 1. Find the most recent question or prompt directed at the user.
-2. Write 3 natural spoken-English replies the user could say, grounded in the profile facts above whenever they are relevant. Keep each reply 1-3 sentences, conversational, first person.
-3. If no clear question exists, suggest 3 natural things the user could say next to keep the conversation going.
+2. Write the single best natural spoken-English reply the user could say, grounded in the profile facts above whenever they are relevant. Keep it 1-3 sentences, conversational, first person.
+3. If no clear question exists, suggest the single best natural thing the user could say next to keep the conversation going.
 
-Return ONLY a JSON array of 3 strings, no markdown, no explanation. Example: ["reply one","reply two","reply three"]`;
+Return ONLY a JSON array containing exactly 1 string, no markdown, no explanation. Example: ["reply"]`;
 
     const models = Array.from(
       new Set([

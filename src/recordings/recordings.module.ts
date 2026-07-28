@@ -6,9 +6,10 @@ import { AiModule } from '../ai/ai.module';
 import { StorageModule } from '../storage/storage.module';
 import { SpeechModule } from '../speech/speech.module';
 import { AuditModule } from '../audit/audit.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
-  imports: [AiModule, StorageModule, SpeechModule, AuditModule],
+  imports: [AiModule, StorageModule, SpeechModule, AuditModule, UsersModule],
   controllers: [RecordingsController],
   providers: [RecordingsRepository, RecordingsService],
   exports: [RecordingsService, RecordingsRepository],

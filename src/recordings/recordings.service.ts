@@ -27,6 +27,8 @@ import { MulterFile } from '../common/types/uploaded-file';
 import { VercelBlobService } from '../storage/vercel-blob.service';
 import { randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
+import { UsersRepository } from '../users/users.repository';
+import { FirebaseService } from '../firebase/firebase.service';
 
 @Injectable()
 export class RecordingsService {
@@ -40,6 +42,8 @@ export class RecordingsService {
     private readonly config: ConfigService,
     private readonly speechService: SpeechService,
     private readonly audit: AuditService,
+    private readonly usersRepository: UsersRepository,
+    private readonly firebaseService: FirebaseService,
   ) {}
 
   /** Draft khi bắt đầu ghi — status=RECORDING, chưa có audio/transcript. */
@@ -176,7 +180,24 @@ export class RecordingsService {
       saved.id,
       userId,
     );
+    void this.notifyRecordingReady(userId, saved.title);
     return this.toDto(full ?? saved, true);
+  }
+
+  /** Fire-and-forget push — lets the user know a recording finished saving. */
+  private async notifyRecordingReady(userId: string, title: string) {
+    try {
+      const user = await this.usersRepository.findById(userId);
+      if (!user?.fcmToken) return;
+      await this.firebaseService.sendPush(user.fcmToken, {
+        title: 'Bản ghi đã lưu xong',
+        body: title,
+      });
+    } catch (err) {
+      this.logger.warn(
+        `notifyRecordingReady failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   /**
