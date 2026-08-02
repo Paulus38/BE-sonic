@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GeminiSpeechProvider } from './providers/gemini-speech.provider';
 import { DeepgramSpeechProvider } from './providers/deepgram-speech.provider';
+import { WhisperSpeechProvider } from './providers/whisper-speech.provider';
 import {
   FileTranscriptResult,
   SpeechProvider,
@@ -27,6 +28,7 @@ export class SpeechService implements OnModuleInit {
     config: ConfigService,
     private readonly gemini: GeminiSpeechProvider,
     private readonly deepgram: DeepgramSpeechProvider,
+    private readonly whisper: WhisperSpeechProvider,
   ) {
     this.mode =
       (config.get<string>('app.speechProvider') as SpeechProviderType) ??
@@ -98,7 +100,9 @@ export class SpeechService implements OnModuleInit {
 
   /**
    * Offline / file STT for re-transcribe from stored audio.
-   * Prefer Deepgram prerecorded (with diarization); fallback to Gemini.
+   * Prefer Deepgram prerecorded (with diarization); fallback to Whisper,
+   * then Gemini. Neither fallback diarizes — the whole file comes back as
+   * a single speaker segment.
    */
   async transcribeFile(options: {
     buffer: Buffer;
@@ -109,7 +113,7 @@ export class SpeechService implements OnModuleInit {
   }): Promise<FileTranscriptResult & { provider: string }> {
     const language = options.language === 'vi' ? 'vi' : 'en';
     const mime = options.mimeType || 'audio/webm';
-    let deepgramError: string | null = null;
+    const errors: string[] = [];
 
     if (this.deepgram.isReady()) {
       try {
@@ -120,8 +124,28 @@ export class SpeechService implements OnModuleInit {
         );
         return { ...result, provider: 'deepgram' };
       } catch (err) {
-        deepgramError = (err as Error).message;
-        this.logger.warn(`Deepgram file STT failed: ${deepgramError}`);
+        const msg = (err as Error).message;
+        errors.push(`Deepgram: ${msg}`);
+        this.logger.warn(`Deepgram file STT failed: ${msg}`);
+      }
+    }
+
+    if (this.whisper.isReady()) {
+      try {
+        const text = await this.whisper.transcribeBuffer(
+          options.buffer,
+          mime,
+          language,
+        );
+        return {
+          text,
+          segments: singleSpeakerSegments(text),
+          provider: 'whisper',
+        };
+      } catch (err) {
+        const msg = (err as Error).message;
+        errors.push(`Whisper: ${msg}`);
+        this.logger.warn(`Whisper file STT failed: ${msg}`);
       }
     }
 
@@ -129,9 +153,7 @@ export class SpeechService implements OnModuleInit {
       // Gemini inline audio — skip if file is very large
       if (options.buffer.length > 18 * 1024 * 1024) {
         throw new Error(
-          deepgramError
-            ? `Deepgram failed (${deepgramError}). Audio too large for Gemini fallback.`
-            : 'Audio too large for Gemini fallback; configure Deepgram or use a shorter clip',
+          [...errors, 'Gemini: audio too large for inline fallback'].join(' | '),
         );
       }
       try {
@@ -148,22 +170,15 @@ export class SpeechService implements OnModuleInit {
           provider: 'gemini',
         };
       } catch (err) {
-        const geminiError = (err as Error).message;
-        throw new Error(
-          [
-            deepgramError ? `Deepgram: ${deepgramError}` : null,
-            `Gemini: ${geminiError}`,
-          ]
-            .filter(Boolean)
-            .join(' | '),
-        );
+        errors.push(`Gemini: ${(err as Error).message}`);
+        throw new Error(errors.join(' | '));
       }
     }
 
     throw new Error(
-      deepgramError
-        ? `Deepgram failed: ${deepgramError}. GEMINI_API_KEY missing for fallback.`
-        : 'No speech provider ready — set DEEPGRAM_API_KEY and/or GEMINI_API_KEY',
+      errors.length > 0
+        ? `${errors.join(' | ')} | No further fallback configured`
+        : 'No speech provider ready — set DEEPGRAM_API_KEY, OPENAI_API_KEY and/or GEMINI_API_KEY',
     );
   }
 

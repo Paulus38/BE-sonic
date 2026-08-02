@@ -2,12 +2,14 @@ import { ConfigService } from '@nestjs/config';
 import { SpeechService } from './speech.service';
 import { GeminiSpeechProvider } from './providers/gemini-speech.provider';
 import { DeepgramSpeechProvider } from './providers/deepgram-speech.provider';
+import { WhisperSpeechProvider } from './providers/whisper-speech.provider';
 import { SpeechProviderType } from '../common/enums';
 
 function makeService(
   mode: SpeechProviderType,
   deepgram: Partial<DeepgramSpeechProvider>,
   gemini: Partial<GeminiSpeechProvider>,
+  whisper: Partial<WhisperSpeechProvider> = {},
 ) {
   const config = {
     get: jest.fn((key: string) =>
@@ -29,6 +31,11 @@ function makeService(
       createSession: jest.fn(),
       ...deepgram,
     } as unknown as DeepgramSpeechProvider,
+    {
+      name: 'whisper',
+      isReady: () => false,
+      ...whisper,
+    } as unknown as WhisperSpeechProvider,
   );
 }
 
@@ -100,6 +107,40 @@ describe('SpeechService.transcribeFile', () => {
     expect(result.segments).toEqual([
       {
         text: 'hello gemini',
+        speaker: 'Speaker 1',
+        tStartMs: 0,
+        tEndMs: 0,
+      },
+    ]);
+  });
+
+  it('falls back to Whisper when Deepgram fails and Whisper is ready', async () => {
+    const service = makeService(
+      SpeechProviderType.AUTO,
+      {
+        isReady: () => true,
+        transcribeBuffer: jest
+          .fn()
+          .mockRejectedValue(new Error('quota exceeded')),
+      },
+      { isReady: () => true },
+      {
+        isReady: () => true,
+        transcribeBuffer: jest.fn().mockResolvedValue('hello whisper'),
+      },
+    );
+
+    const result = await service.transcribeFile({
+      buffer,
+      mimeType: 'audio/webm',
+      language: 'en',
+    });
+
+    expect(result.provider).toBe('whisper');
+    expect(result.text).toBe('hello whisper');
+    expect(result.segments).toEqual([
+      {
+        text: 'hello whisper',
         speaker: 'Speaker 1',
         tStartMs: 0,
         tEndMs: 0,

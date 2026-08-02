@@ -15,6 +15,9 @@ export default registerAs('app', () => ({
   geminiApiKey: process.env.GEMINI_API_KEY ?? '',
   geminiModel: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash-lite',
   deepgramApiKey: process.env.DEEPGRAM_API_KEY ?? '',
+  /** File-only retranscribe fallback (see WhisperSpeechProvider) — Whisper via Groq's free tier, no live/diarization support. */
+  groqApiKey: process.env.GROQ_API_KEY ?? '',
+  groqWhisperModel: process.env.GROQ_WHISPER_MODEL ?? 'whisper-large-v3-turbo',
   /** Soft display quota for AI token meter (not Google's live rate limit). */
   aiTokenQuota: Math.max(
     1_000,
