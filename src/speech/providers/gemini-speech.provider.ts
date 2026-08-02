@@ -11,6 +11,11 @@ class GeminiSpeechSession implements SpeechSession {
   private buffer: Buffer[] = [];
   private bufferBytes = 0;
   private readonly flushBytes = 48_000;
+  // Hard cap so a slow/rate-limited Gemini call can't make the backlog grow
+  // without bound — once a flush is in flight, keep at most ~this much
+  // trailing audio and drop older bytes rather than shipping an
+  // ever-larger, ever-staler blob on the next flush.
+  private readonly maxBufferBytes = this.flushBytes * 4;
   private flushing = false;
   private onResult: ((result: TranscriptResult) => void) | null = null;
   private mimeType = 'audio/webm';
@@ -32,6 +37,13 @@ class GeminiSpeechSession implements SpeechSession {
     this.mimeType = mimeType || this.mimeType;
     this.buffer.push(chunk);
     this.bufferBytes += chunk.length;
+    while (this.bufferBytes > this.maxBufferBytes && this.buffer.length > 1) {
+      const dropped = this.buffer.shift()!;
+      this.bufferBytes -= dropped.length;
+      this.logger.warn(
+        `Gemini audio backlog exceeded ${this.maxBufferBytes}B, dropping stale audio`,
+      );
+    }
     if (this.bufferBytes >= this.flushBytes && !this.flushing) {
       await this.flush(false);
     }
