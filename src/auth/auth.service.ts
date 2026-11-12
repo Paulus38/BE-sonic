@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -11,7 +15,10 @@ export interface JwtPayload {
   sub: string;
   email: string;
   role?: string;
+  tokenUse?: 'refresh';
 }
+
+const REFRESH_TOKEN_EXPIRES_IN = '15h';
 
 /**
  * Dummy bcrypt hash so missing-user logins still run compare()
@@ -73,6 +80,39 @@ export class AuthService {
     return this.buildAuthResponse(user.id, user.email, user);
   }
 
+  async refresh(refreshToken: string) {
+    let payload: JwtPayload;
+    try {
+      payload = await this.jwtService.verifyAsync<JwtPayload>(refreshToken, {
+        secret: this.getRefreshSecret(),
+      });
+    } catch {
+      throw new UnauthorizedException('Refresh token không hợp lệ hoặc đã hết hạn');
+    }
+
+    if (payload.tokenUse !== 'refresh' || !payload.sub) {
+      throw new UnauthorizedException('Refresh token không hợp lệ');
+    }
+
+    let user: Awaited<ReturnType<UsersService['findByIdOrFail']>>;
+    try {
+      user = await this.usersService.findByIdOrFail(payload.sub);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw new UnauthorizedException('Tài khoản không còn tồn tại');
+      }
+      throw error;
+    }
+    return this.buildAuthResponse(user.id, user.email, user);
+  }
+
+  private getRefreshSecret(): string {
+    return (
+      this.config.get<string>('app.jwtRefreshSecret') ??
+      this.config.getOrThrow<string>('app.jwtSecret')
+    );
+  }
+
   private buildAuthResponse(
     userId: string,
     email: string,
@@ -84,10 +124,19 @@ export class AuthService {
       role: user.role || 'user',
     };
     const accessToken = this.jwtService.sign(payload);
+    const refreshToken = this.jwtService.sign(
+      { ...payload, tokenUse: 'refresh' },
+      {
+        secret: this.getRefreshSecret(),
+        expiresIn: REFRESH_TOKEN_EXPIRES_IN,
+      },
+    );
     return {
       accessToken,
+      refreshToken,
       tokenType: 'Bearer',
       expiresIn: this.config.get<string>('app.jwtExpiresIn'),
+      refreshExpiresIn: REFRESH_TOKEN_EXPIRES_IN,
       user: this.usersService.toPublic(user),
     };
   }

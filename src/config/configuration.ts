@@ -10,6 +10,10 @@ export default registerAs('app', () => ({
     .filter(Boolean),
   jwtSecret: process.env.JWT_SECRET ?? '',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '2h',
+  jwtRefreshSecret:
+    process.env.JWT_REFRESH_SECRET?.trim() ||
+    process.env.JWT_SECRET?.trim() ||
+    '',
   bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS ?? '12', 10),
   speechProvider: process.env.SPEECH_PROVIDER ?? 'gemini',
   geminiApiKey: process.env.GEMINI_API_KEY ?? '',

@@ -51,6 +51,7 @@ import { HealthController } from './health.controller';
                 'req.body.password',
                 'req.body.token',
                 'req.body.accessToken',
+                'req.body.refreshToken',
               ],
               remove: true,
             },

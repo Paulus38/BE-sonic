@@ -30,6 +30,9 @@ npm run start:dev
 
 ## Security
 
+- Access JWT expires according to `JWT_EXPIRES_IN` (default 2h); refresh JWTs expire after 15h and are renewed automatically by the frontend on HTTP 401.
+- Set `JWT_REFRESH_SECRET` to a separate signing secret in production; if omitted, `JWT_SECRET` is used.
+
 - JWT Bearer auth on all protected routes and WebSocket
 - bcrypt password hashing
 - Helmet, CORS allowlist, global ValidationPipe (whitelist)
